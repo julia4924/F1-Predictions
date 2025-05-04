@@ -511,7 +511,7 @@ X %>%
 
 
 
-#zmienną wind_speed można wyjebac
+#zmienną wind_speed można wyrzucic
 #position.changes zostawic a position out, bo position.changes ma większy sens predykcyjny do problemu 
 
 ```

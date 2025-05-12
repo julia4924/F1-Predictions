@@ -6,15 +6,15 @@ Celem projektu jest przewidywanie, czy kierowca Formuły 1 **nie ukończy wyści
 
 - **Zmienna docelowa**: `DNF` (0 – ukończył wyścig, 1 – nie ukończył)
 - **Analiza danych**: korelacje, rozkłady, klastrowanie (pogoda, styl jazdy)
-- **Modelowanie**: regresja logistyczna, random forest, XGBoost
+- **Modelowanie**: regresja logistyczna, random forest, XGBOOST,KNN,SVM
 - **Strojenie hiperparametrów**: `tune_grid`, `tune_bayes`
 - **Ewaluacja modeli**: accuracy, ROC AUC, confusion matrix, wykresy ROC
-- **Najlepszy model**: XGBoost (AUC ≈ 0.95)
+- **Najlepszy model**: XGBoost Undersampled (AUC ≈ 0.98)
 
 
 ## Wnioski
 
-Analiza potwierdziła, że czynniki takie jak agresja kierowcy, strategia pit-stopów oraz warunki pogodowe znacząco wpływają na ryzyko nieukończenia wyścigu. Model XGBoost osiągnął najwyższą skuteczność i może być z powodzeniem zastosowany w analizach predykcyjnych F1.
+Analiza potwierdziła, że czynniki takie jak agresja kierowcy, strategia pit-stopów oraz warunki pogodowe znacząco wpływają na ryzyko nieukończenia wyścigu. Model XGBoost Undersampled osiągnął najwyższą skuteczność i może być z powodzeniem zastosowany w analizach predykcyjnych F1.
 
 
 

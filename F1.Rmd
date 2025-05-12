@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = FALSE,warning=FALSE,message=FALSE)
 
 :::: {style="display: flex; align-items: center; justify-content: space-between;"}
 ::: {style="font-size: 3em; font-weight: bold;"}
-Formuła 1: predykcja i strategia
+**Formuła 1: predykcja i strategia**
 :::
 
 ```{r echo=FALSE,out.width="60%", fig.align='right'}
@@ -32,7 +32,6 @@ formula1$Driver<-gsub("RÃƒÂ¤ikkÃƒÂ¶nen", "Räikkönen",formula1$Driver)
 formula1$Driver<-gsub("HÃƒÂ¼lkenberg","Hülkenberg",formula1$Driver)
 formula1$Driver<-gsub("PÃƒÂ©rez","Pérez",formula1$Driver)
 knitr::kable(head(formula1))
-colSums(is.na(formula1))
 
 
 # dane na telemetryczne na temat kół nie zostały zgromadzone to te usuwam
@@ -90,11 +89,8 @@ columns_description <- data.frame(
 knitr::kable(columns_description)
 ```
 
-# Przygotowanie danych
-
 ```{r}
 library(tidyverse)
-str(formula1)
 
 formula1$Circuit<-gsub("AutÃƒÂ³dromo Hermanos RodrÃƒÂ­guez","Autódromo Hermanos Rodríguez",formula1$Circuit)
 
@@ -132,10 +128,84 @@ formula1$Location<-ifelse(formula1$Location=="MontmelÃ³","Montmeló",formula1$
 formula1<-formula1 %>% 
   mutate(Stint.Length=ifelse(Laps==1,1,Stint.Length))
 
+
+
+```
+
+```{r}
+library(tidyverse)
+library(tidygeocoder)
+library(leaflet)
+
+library(tibble)
+
+
+
+race_details <- tribble(
+  ~Race.Name, ~Circuit, ~Location,
+  "Australian Grand Prix", "Albert Park Grand Prix Circuit", "Melbourne, Australia",
+  "Bahrain Grand Prix", "Bahrain International Circuit", "Sakhir, Bahrain",
+  "Chinese Grand Prix", "Shanghai International Circuit", "Shanghai, China",
+  "Azerbaijan Grand Prix", "Baku City Circuit", "Baku, Azerbaijan",
+  "Spanish Grand Prix", "Circuit de Barcelona-Catalunya", "Montmeló, Spain",
+  "Monaco Grand Prix", "Circuit de Monaco", "Monte Carlo, Monaco",
+  "Canadian Grand Prix", "Circuit Gilles Villeneuve", "Montreal, Canada",
+  "French Grand Prix", "Circuit Paul Ricard", "Le Castellet, France",
+  "Austrian Grand Prix", "Red Bull Ring", "Spielberg, Austria",
+  "British Grand Prix", "Silverstone Circuit", "Silverstone, UK",
+  "German Grand Prix", "Hockenheimring", "Hockenheim, Germany",
+  "Hungarian Grand Prix", "Hungaroring", "Budapest, Hungary",
+  "Belgian Grand Prix", "Circuit de Spa-Francorchamps", "Spa, Belgium",
+  "Italian Grand Prix", "Autodromo Nazionale di Monza", "Monza, Italy",
+  "Singapore Grand Prix", "Marina Bay Street Circuit", "Marina Bay, Singapore",
+  "Russian Grand Prix", "Sochi Autodrom", "Sochi, Russia",
+  "Japanese Grand Prix", "Suzuka Circuit", "Suzuka, Japan",
+  "United States Grand Prix", "Circuit of the Americas", "Austin, USA",
+  "Styrian Grand Prix", "Red Bull Ring", "Spielberg, Austria",
+  "70th Anniversary Grand Prix", "Silverstone Circuit", "Silverstone, UK",
+  "Tuscan Grand Prix", "Autodromo Internazionale del Mugello", "Mugello, Italy",
+  "Emilia Romagna Grand Prix", "Autodromo Enzo e Dino Ferrari", "Imola, Italy",
+  "Turkish Grand Prix", "Istanbul Park", "Istanbul, Turkey",
+  "Sakhir Grand Prix", "Bahrain International Circuit", "Sakhir, Bahrain",
+  "Abu Dhabi Grand Prix", "Yas Marina Circuit", "Abu Dhabi, UAE",
+  "Dutch Grand Prix", "Circuit Park Zandvoort", "Zandvoort, Netherlands",
+  "Qatar Grand Prix", "Losail International Circuit", "Al Daayen, Qatar",
+  "Saudi Arabian Grand Prix", "Jeddah Corniche Circuit", "Jeddah, Saudi Arabia",
+  "Miami Grand Prix", "Miami International Autodrome", "Miami, USA",
+  "Las Vegas Grand Prix", "Las Vegas Strip Street Circuit", "Las Vegas, USA"
+)
+
+race_coords <- race_details %>%
+  geocode(Location, method = "osm", lat = lat, long = long)
+
+race_coords <- race_coords %>%
+  mutate(order = row_number()) %>% 
+  arrange(order)
+
+leaflet(data = race_coords) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  # Linie trasy między torami
+  addPolylines(
+    lng = ~long, lat = ~lat,
+    color = "#A67B5B", weight = 2.5, opacity = 0.8
+  ) %>%
+  # Punkty wyścigów
+  addCircleMarkers(
+    lng = ~long, lat = ~lat,
+    radius = 5,
+    popup = ~paste0("<b>", Circuit, "</b><br>", Location),
+    color = "#8B5E3C",
+    fillColor = "#D2B48C",
+    fillOpacity = 0.9
+  ) %>% 
+  addControl(
+    html = "<h3 style='color:#4B3621;'>Mapa wyścigów F1</h3>",
+    position = "topright"
+  )
+
 ```
 
 # EDA
-
 
 ```{r}
 #-------- dodaje te kolumny,żeby usunąć duplikaty (suma stintów i średnia ilość okrążeń na jednym komplecie opon ):
@@ -150,13 +220,7 @@ formula1<-formula1 %>%
   mutate(Avg_stint_length=round(mean(Stint.Length,na.rm=TRUE)))
 
 
-#dodaje kolumnę top3
 
-formula1<-formula1 %>% 
-  mutate(
-    
-    TOP3=ifelse(Position %in% c(1,2,3) & Season!=2018,1,0)
-  )
 
 # wprowadzam zmienną DNF
  formula1<-formula1 %>% 
@@ -168,8 +232,11 @@ formula1<-formula1 %>%
   group_by(Season, Round, Driver) %>%
   mutate(tire_strategy = paste(Tire.Compound, collapse = " -> "),.groups=NULL)
 
+
+
 formula1<-formula1 %>% 
   group_by(Season,Circuit,Driver) %>% 
+  ungroup() %>% 
   select(-c(Stint,Stint.Length,Pit_Lap,Pit_Time,Tire.Compound)) %>% 
   distinct()
 formula1$DNF<-factor(formula1$DNF,levels=c(0,1))
@@ -181,21 +248,12 @@ formula1<-formula1 %>%
     Driver.Fast.Lap.Attempts=ifelse(is.na(Fast.Lap.Attempts)&Laps==0,0,Fast.Lap.Attempts),
     Lap.Time.Variation=ifelse(is.na(Lap.Time.Variation)&Laps==0,0,Lap.Time.Variation))
       
-colSums(is.na(formula1))
 ```
-
-## Statystyki i wykresy
 
 ```{r}
-library(ggcorrplot)
 num_vars <- formula1[, sapply(formula1, is.numeric)]
-cor(num_vars[,-c(1,2)],use="pairwise.complete.obs") %>% 
-  ggcorrplot()
+
 ```
-
-Powyższa macierz korelacji pokazuje siłę liniowego związku między zmiennnymi przed wstępną ich selekcją oraz imputacją braków danych.
-
-## Rozkłady zmiennych
 
 ```{r}
 library(ggplot2)
@@ -240,108 +298,6 @@ funkcja_wykresy<-function(tabelka,zmienne){
 
 ```
 
-```{r}
-
-funkcja_wykresy(as.data.frame(num_vars)[,-c(1,2,4)],colnames(num_vars)[-c(1,2,4)])[[2]]
-```
-
-Powyższy histogram i wykres pudełkowy przedstawiają rozkład zmiennej `TotalPitStops`, która jest sumą pit stopów, jakie miały miejsce podczas danego wyścigu. Jak widać rozkład zmiennej charakteryzuje widoczna asymetria prawostronna, zatem podczas wyścigów przeważnie miejsce miał jeden pit stop. Jak widać na wykresie pudełkowym występuje kilka obserwacji odstających, zmienną charakteryzuje znaczne rozproszenie danych.
-
-```{r}
-funkcja_wykresy(as.data.frame(num_vars)[,-c(1,2,4)],colnames(num_vars)[-c(1,2,4)])[[4]]
-```
-
-Powyższe wykresy pokazują,że zmienną `Air_Temp_C` charakteryzuje rozkład niemal normalny, obserwacje są skupione wokół średniej, występuje niewielka asymetria oraz obserwacje odstające (zbliżone do 0 bądź powyżej 30 $^oC$ ).
-
-```{r}
-funkcja_wykresy(as.data.frame(num_vars)[,-c(1,2,4)],colnames(num_vars)[-c(1,2,4)])[[6]]
-```
-
-Powyższe wykresy przedstawiają rozkład zmiennej `Humidity_.` , która określa poziom wilgotności powietrza na torze. Jak widać charakteryzuje go asymetria lewostronna, zatem wyścigi głównie odbywają się w warunkach o silnej wilgotności powietrza.
-
-```{r}
-funkcja_wykresy(as.data.frame(num_vars)[,-c(1,2,4)],colnames(num_vars)[-c(1,2,4)])[[7]]
-```
-
-Na podstawie powyższych wykresów można stwierdzić,że zmienna `Wind_Speed_KMH` charakteryzuje się asymetrią prawostronną,co wskazuje na to,że dominują wyścigi, podczas których wiał delikatny wiatr, co jest logiczne, ponieważ wyścigi nie mogą odbywać się podczas silnych wiatrów.
-
-```{r}
-funkcja_wykresy(as.data.frame(num_vars)[,-c(1,2,4)],colnames(num_vars)[-c(1,2,4)])[[8]]
-```
-
-Zmienna `Lap.Time.Variation`, mierząca zmienność czasów okrążeń kierowców, wykazuje silną prawoskośność z większością wartości skoncentrowanych blisko 0. Typowy kierowca utrzymuje bardzo stabilne tempo wyścigowe, a jedynie sporadycznie występują duże odchylenia, mogące świadczyć o błędach, pit stopach lub incydentach na torze.
-
-```{r}
-funkcja_wykresy(as.data.frame(num_vars)[,-c(1,2,4)],colnames(num_vars)[-c(1,2,4)])[[11]]
-```
-
-Zmiana pozycji kierowców (`Position.Changes`) wykazuje rozkład niemal równomierny, z wartościami rozłożonymi od 0 do około 0.85. Średnia zmiana pozycji wynosi około 0.4, co sugeruje umiarkowane przesunięcia w klasyfikacji podczas wyścigu.
-
-```{r}
-funkcja_wykresy(as.data.frame(num_vars)[,-c(1,2,4)],colnames(num_vars)[-c(1,2,4)])[[12]]
-```
-
-Zmienna `Driver.Aggression.Score` charakteryzuje się silną asymetrią prawostronną, występuje wiele obserwacji odstających, jednak większość kumuluje się w okolicy zera, zatem większość kierowców ma podobny styl jazdy.
-
-```{r}
-funkcja_wykresy(as.data.frame(num_vars)[,-c(1,2,4)],colnames(num_vars)[-c(1,2,4)])[[14]]
-```
-
-Zmienna `Avg_stint_length` obliczona na podstawie `Stint.Length` charakteryzuje się rozkładem zbliżonym do normalnego, większa część obserwacji skupia się wokół średniej, co sugeruje ,że średnio kierowca jeździ na jednym komplecie opon około 20 okrążeń .Jednak występuje w niej wiele obserwacji odstających , na co wpływ może mieć wyższy miernik `Tire.Usage.Agression` czy fakt,że kierowca nie ukończył wyścigu.
-
-### Normalność rozkładów
-
-$$
-H_0: i-ta \ zmienna \ ma \ rozkład \ normalny\\
-H_1:i-ta \ zmienna \ ma \ rozkład \ inny \ niż\  normalny\\
-$$
-
-```{r}
-
-library(tidyverse)
-library(nortest)
-library(kableExtra)
-library(dplyr)
-
-funkcja_tabelka <- function(tabelka, zmienne) {
-  
-  tabelka %>%
-    select(all_of(zmienne)) %>%
-    pivot_longer(cols = everything(), names_to = "zmienna", values_to = "wartosc") %>%
-    group_by(zmienna) %>%
-    summarise(
-      ad_p = tryCatch(ad.test(wartosc)$p.value, error = function(e) NA),
-      cvm_p = tryCatch(cvm.test(wartosc)$p.value, error = function(e) NA),
-      lillie_p = tryCatch(lillie.test(wartosc)$p.value, error = function(e) NA),
-      .groups = "drop"
-    )
-}
-
-tabelka_normalnosc<-funkcja_tabelka(as.data.frame(num_vars)[,-c(1,2)],colnames(num_vars)[-c(1,2)])
-
-
-
-tabelka_normalnosc_colored <- tabelka_normalnosc %>%
-  mutate(
-    ad_p = ifelse(ad_p > 0.05,
-                  cell_spec(round(ad_p, 3), background = "lightyellow"),
-                  cell_spec(round(ad_p, 3), background = "white")),
-    cvm_p = ifelse(cvm_p > 0.05,
-                   cell_spec(round(cvm_p, 3), background = "lightyellow"),
-                   cell_spec(round(cvm_p, 3), background = "white")),
-    lillie_p = ifelse(lillie_p > 0.05,
-                      cell_spec(round(lillie_p, 3), background = "lightyellow"),
-                      cell_spec(round(lillie_p, 3), background = "white"))
-  )
-
-tabelka_normalnosc_colored %>%
-  kable(format = "html", escape = FALSE) %>%  # Uwaga: escape=FALSE, żeby cell_spec działał
-  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
-
-```
-
-**Wniosek:** Na podstawie przeprowadzonych testów zgodności i otrzymanej p-wartości, na poziomie istotności odrzucam $H_0$ dla każdej zmiennej, zatem żadna z nich nie ma rozkładu normalnego.
-
 ## Podstawowe statystyki
 
 ```{r}
@@ -385,90 +341,568 @@ wynik_colored %>%
   kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
 ```
 
+```{r}
+
+library(tidyverse)
+library(nortest)
+library(kableExtra)
+library(dplyr)
+
+funkcja_tabelka <- function(tabelka, zmienne) {
+  
+  tabelka %>%
+    select(all_of(zmienne)) %>%
+    pivot_longer(cols = everything(), names_to = "zmienna", values_to = "wartosc") %>%
+    group_by(zmienna) %>%
+    summarise(
+      ad_p = tryCatch(ad.test(wartosc)$p.value, error = function(e) NA),
+      cvm_p = tryCatch(cvm.test(wartosc)$p.value, error = function(e) NA),
+      lillie_p = tryCatch(lillie.test(wartosc)$p.value, error = function(e) NA),
+      .groups = "drop"
+    )
+}
+
+tabelka_normalnosc<-funkcja_tabelka(as.data.frame(num_vars)[,-c(1,2)],colnames(num_vars)[-c(1,2)])
+
+
+
+tabelka_normalnosc_colored <- tabelka_normalnosc %>%
+  mutate(
+    ad_p = ifelse(ad_p > 0.05,
+                  cell_spec(round(ad_p, 3), background = "lightyellow"),
+                  cell_spec(round(ad_p, 3), background = "white")),
+    cvm_p = ifelse(cvm_p > 0.05,
+                   cell_spec(round(cvm_p, 3), background = "lightyellow"),
+                   cell_spec(round(cvm_p, 3), background = "white")),
+    lillie_p = ifelse(lillie_p > 0.05,
+                      cell_spec(round(lillie_p, 3), background = "lightyellow"),
+                      cell_spec(round(lillie_p, 3), background = "white"))
+  )
+
+tab<-tabelka_normalnosc_colored %>%
+ kable(format = "html", escape = FALSE) %>%  # Uwaga: escape=FALSE, żeby cell_spec działał
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"))
+
+```
+
+```{r}
+# driver aggresion vs position changes 
+library(ggplot2)
+ggplot(data=formula1,aes(x=Driver.Aggression.Score,y=Position.Changes,color=Driver.Aggression.Score))+
+  geom_point()+
+  scale_color_gradient(low = "beige", high = "lightblue") +
+  labs(x='Driver Aggression Score',y='Position Changes',title='Agresja kierowcy vs zmiany pozycji podczas wyścigu')+
+  theme_minimal()
+
+
+```
+
+Jak widać na powyższym wykresie, wyższa agresja kierowcy nie gwarantuje zasadniczej różnicy w pozycji kierowcy podczas wyścigu. Nie ma liniowej zależności między `Position.Changes` a `Driver.Aggression.Score`. Zauważyć jednak można, że kierowcy z agresją w okolicach 6 nie mają wielkiej różnicy w pozcycji oraz,że większość danych skupia się między 4-6 jeśli chodzi o współczynnik agresji kierowcy, zatem wskazuje to, iż większość kierowców charakteryzuje się agresywną jazdą.
+
+```{r}
+#średni czas pit stopu vs position
+
+
+
+
+
+formula1 <- formula1 %>%
+  filter(AvgPitStopTime <= 60)
+pit <- formula1 %>%
+  group_by(Driver, Race.Name, Date) %>%
+  mutate(pit_stop = AvgPitStopTime / TotalPitStops) 
+
+ggplot(formula1,aes(x=AvgPitStopTime,y=Position,color=Position))+
+  geom_point()+
+  scale_color_gradient(low = "beige", high = "magenta") +
+  labs(x='Średnia długość stintu',y='Pozycja końcowa',title='Wpływ długości stintu na wynik wyścigu')+
+  theme_minimal()
+```
+
+Podobnie jak w przypadku poprzedniego wykresu, nie ma liniowej zależności między zmiennymi `Position` oraz `AvgPitStopTime` . Zauważyć można, że większość łącznej długości pit stop dla danego kierowcy podczas wyścigu trwała w okolicach 25 sekund (łącznie z wjazdem i wyjazdem do alei serwisowej). Widać także, że dłuższe zjazdy wpływały niekorzystnie na pozycję końcową kierowcy.
+
+```{r}
+# position vs constructior 
+library(plotly)
+
+team_colors <- c(
+  "Alfa Romeo"      = "#8B0000",  
+  "AlphaTauri"      = "#1F3B73",  
+  "Alpine F1 Team"  = "#007FFF",  
+  "Aston Martin"    = "#004F44",  
+  "Ferrari"         = "#FF1E00",  
+  "Force India"     = "#FF69B4",  
+  "Haas F1 Team"    = "#7F8C8D",  
+  "McLaren"         = "#FF8000",  
+  "Mercedes"        = "#00E5C0",  
+  "RB F1 Team"      = "#0033FF",  
+  "Racing Point"    = "#FF8DAA", 
+  "Red Bull"        = "#241E4E",  
+  "Renault"         = "#FFD700",  
+  "Sauber"          = "#4682B4",  
+  "Toro Rosso"      = "#4169E1",  
+  "Williams"        = "#9DD9F3"  )
+
+
+
+wykres<-ggplot(formula1,aes(x=as.factor(Constructor),y=Position,fill=Constructor))+
+  geom_boxplot()+
+  scale_fill_manual(values = team_colors) +
+  theme_minimal()+
+  labs(x='Zespół',y='Pozycja',title='Zespół vs Pozycja ')
+ggplotly(wykres)
+
+
+```
+
+Powyższy wykres słupkowy przedstawia rozkład zajętych pozycji końcowych przez kierowców wszystkich zespołów. Jak widać największą zmiennością zajętych pozycji na przestrzeni lat charakteryzował się Mclaren, najmniejszą Red Bull, zaś najwięcej obserwacji odstających zaobserwowano wśród wyników zespołów Mercedes,Ferrari i RedBull.
+
+```{r}
+#air_temp vs totalpitstops
+team_colors <- c(
+  "Alfa Romeo"      = "#8B0000",  
+  "AlphaTauri"      = "#1F3B73",  
+  "Alpine F1 Team"  = "#007FFF",  
+  "Aston Martin"    = "#004F44",  
+  "Ferrari"         = "#FF1E00",  
+  "Force India"     = "#FF69B4",  
+  "Haas F1 Team"    = "#7F8C8D",  
+  "McLaren"         = "#FF8000",  
+  "Mercedes"        = "#00E5C0",  
+  "RB F1 Team"      = "#0033FF",  
+  "Racing Point"    = "#FF8DAA", 
+  "Red Bull"        = "#241E4E",  
+  "Renault"         = "#FFD700",  
+  "Sauber"          = "#4682B4",  
+  "Toro Rosso"      = "#4169E1",  
+  "Williams"        = "#9DD9F3"  )
+
+wykres2 <- ggplot(formula1, aes(x = as.factor(Constructor), y = Avg_stint_length, fill = Constructor)) +
+  geom_boxplot() +
+  scale_fill_manual(values = team_colors) +
+  theme_minimal() +
+  labs(x = 'Zespół', y = 'Średnia długość stintu', title = 'Zespół vs średnia długość stintu')
+ggplotly(wykres2)
+
+```
+
+Jak widać na powyższym wykresie, w przypadku długości jazdy na jednym komplecie opon,mimo widocznej obecności wartości odstających, większość zespołów zużywała opony w podobny sposób.
+
+```{r}
+ggplot(formula1,aes(x=Avg_stint_length,y=Air_Temp_C,color=Air_Temp_C))+
+  geom_point()+
+  scale_color_gradient(low = "beige", high = "purple")+
+  labs(x="Średnia długość stintu",y="Temperatura powietrza ",title="Długość stitnu vs temperatura powietrza")+
+  theme_minimal()
+
+```
+
+Wykres pokazuje zależność pomiędzy długością stintu a temperaturą powietrza. Brak jest jednoznacznego trendu sugerującego, że temperatura powietrza wpływa istotnie na liczbę przejechanych okrążeń na danym komplecie opon. Większość stintów mieści się w zakresie 10–25 okrążeń, niezależnie od temperatury. Dłuższe stinty (\>40) występują sporadycznie i w umiarkowanych warunkach termicznych (15–25°C), co może wskazywać na ostrożniejsze zarządzanie ogumieniem w takich warunkach.
+
+```{r}
+#pit stop vs aggression score
+
+ggplot(formula1,aes(x=Driver.Aggression.Score,y=Avg_stint_length,color=Air_Temp_C))+
+  geom_point()+
+  scale_color_gradient(low = "beige", high = "orange")+
+  labs(x="Agresja jazdy kierowcy",y="Średnia długość stintu ",title="Wpływ agresji kierowcy na długość stintu")+
+  theme_minimal()
+
+  
+```
+
+Powyższy wykres nie wskazuje na liniową zależność między agresją jazdy kierowcy oraz średnią długością jazdy na jednym komplecie opon. Widać,że dla mniejszej agresji długość stintu jest niższa, jednak może to również wynikać z niedoświadczenia kierowcy i nie ukończenia przez niego wyścigu.
+
+```{r}
+#AGRESJA KIEROWCY VS DNF 
+
+ggplot(formula1, aes(x = DNF, y = Driver.Aggression.Score,fill=DNF)) +
+  geom_boxplot() +
+  labs(title = "Agresja kierowcy a DNF", x = "DNF (0 = ukończył, 1 = nie)", y = "Agresja")+
+  scale_fill_manual(values=c('beige','brown'))+
+  theme_minimal()
+
+
+
+```
+
+Powyższy wykres pudełkowy przedstawia rozkład współczynnika agresji kierowcy w zależności od tego czy ukończył on wyścig. Jak widać zauważyć można wyższą medianę dla kierowców, którzy nie ukończyli wyścigu, jednak wartości zmiennej są podobne w obu grupach, agresja sama w sobie nie jest jednoznacznym predyktorem nieukończenia wyścigu.
+
 # Feature selection
 
-## Badanie zależności
+## Mutual Information
 
 ```{r}
 
-
-
+library(tidymodels)
 library(infotheo)
 #-----sprawdzamy czy ta zmienna jesr faktycznie informatywna ----------
 
 #standardowe usuwanie braków na potrzeby MI
-data2<-formula1[,-c(1:5,10:13)]
-MI_Dataframe<- na.omit(data2)
 
-rownames(MI_Dataframe)<-NULL
+formula_model<-initial_split(formula1[,-c(1:5,10:13,26)],prop=0.8,strata=DNF)
+formula_train<-training(formula_model)
+formula_test<-testing(formula_model)
+
+
+MI_Dataframe<- na.omit(formula_train)
 
 #konwertowanie zmiennych tekstowych na kategoryczne
 
-MI_Dataframe<-MI_Dataframe %>% 
-  mutate(across(where(is.character),as.factor))
 
 #kodowanie wszystkich zmiennych na zmienne numeryczne 
 
 MI_Dataframe<-data.frame(sapply(MI_Dataframe,as.numeric))
 
-MI<-data.frame(
-  
-  Variable=setdiff(names(MI_Dataframe),"DNF"),
-  MI_Score=round(sapply(setdiff(names(MI_Dataframe),"DNF"),
-                  function(var) mutinformation(discretize(MI_Dataframe[[var]]),
-                                               discretize(MI_Dataframe$DNF))),3)
-  
-  
-)
+mi_results <- data.frame(
+
+Variable = setdiff(names(MI_Dataframe), "DNF"),
+MI_Score = sapply(setdiff(names(MI_Dataframe), "DNF"),
+
+function(var) mutinformation(discretize(MI_Dataframe[[var]]), discretize(MI_Dataframe$DNF)) ))
+
 
 #sortowanie danych 
 
-MI<-MI[order(-MI$MI_Score),]
+MI<-mi_results[order(-mi_results$MI_Score),]
 rownames(MI)<-NULL
-MI
-
+knitr::kable(MI)
 
 
 ```
 
-Analiza Mutual Information wykazała, że zmiennymi o najwyższej wartości informacyjnej względem zmiennej docelowej `DNF` są `Position` oraz `Position.Changes`, uzyskując MI na poziomie około $0.3$. Zmienne `Laps` i `TOP3` również posiadają umiarkowaną wartość informacyjną (odpowiednio $~0.9$ i $~0.07$). Natomiast większość pozostałych predyktorów, w szczególności zmienne opisujące warunki pogodowe (`Air_Temp_C`, `Track_Temp_C`, `Humidity_.`), za wyjątkiem `Wind_Speed_KMH` wykazuje bardzo niską wartość MI (<0.02), co sugeruje ich marginalny wpływ na wynik wyścigu i uzasadnia możliwość ich odrzucenia w dalszym modelowaniu.
+Analiza Mutual Information wykazała, że zmiennymi o najwyższej wartości informacyjnej względem zmiennej docelowej `DNF` są `Position` oraz `Position.Changes`, uzyskując MI na poziomie około $0.3$. Zmienna `Laps` również posiadają umiarkowaną wartość informacyjną (odpowiednio $~0.9$ i $~0.07$). Natomiast większość pozostałych predyktorów, w szczególności zmienne opisujące warunki pogodowe (`Air_Temp_C`, `Track_Temp_C`, `Humidity_.`), za wyjątkiem `Wind_Speed_KMH` wykazuje bardzo niską wartość MI (\<0.02), co sugeruje ich marginalny wpływ na wynik wyścigu i uzasadnia możliwość ich odrzucenia w dalszym modelowaniu.
 
-
-##  Zależności cd.
+## Maximum Relevance Minimum Redundancy
 
 ```{r}
+library(tidymodels)
+library(mRMRe)
+set.seed(2024)
+#------------MRMR----------------
 
-funkcja_zaleznosci <- function(y, x, data) {
-  t_test_wartosc_p <- numeric(length(x))
-  
-  for (i in seq_along(x)) {
-    zmienna <- x[i]
-    
-    formuła <- as.formula(paste(zmienna, "~", y))
-    
-    wynik <- t.test(formuła, data = data)
-    
-    t_test_wartosc_p[i] <- wynik$p.value
-  }
-  
-  tabelka <- data.frame(Zmienna = x, p_value = t_test_wartosc_p)
+formula_train_selected<-formula_train %>% 
+  mutate(across(everything(), ~ as.numeric(as.factor(.))))
+
+mrmr_input <- formula_train_selected %>%
+  select(DNF, everything())
   
 
-    knitr::kable(tabelka, digits = 4)
+
+mrmr_data <- mRMR.data(data = mrmr_input)
+
+
+feature_selection <- mRMR.classic(data = mrmr_data, target_indices = 1, feature_count = 7)
+
+
+selected_indices <- solutions(feature_selection)[[1]]
+selected_variables <- colnames(mrmr_input)[selected_indices + 1]  # +1, bo target to kolumna 1
+
+df <- data.frame(Zmienna =selected_variables)
+knitr::kable(df)
+```
+
+Posługując się miarą MRMR wyodrębnione zostały zmienne `TotalPitStops`, `AvgPitStopTime`,`Lap.Time.Variation`,`Wind_Speed_KMH`,`Driver.Fast.Lap.Attempts`,`Position.Changes`,`Position`.
+
+## Recursive Feature Elimination
+
+```{r}
+library(caret)
+library(xgboost)
+
+
+formula_train$DNF <- as.factor(formula_train$DNF)
+
+
+x <- formula_train[, setdiff(names(formula_train), "DNF")]
+y <- formula_train$DNF
+
+xgbFuncs <- caretFuncs
+
+xgbFuncs$fit <- function(x, y, first, last, ...) {
+  xgboost(data = as.matrix(x), label = as.numeric(y) - 1,
+          objective = "binary:logistic", nrounds = 50, verbose = 0, ...)
 }
 
-zmienne <- c("Driver.Aggression.Score", "Lap.Time.Variation", "Avg_stint_length","Laps","Tire.Usage.Aggression","Wind_Speed_KMH","AvgPitStopTime")
-funkcja_zaleznosci(y = "DNF", x = zmienne, data = formula1)
+xgbFuncs$pred <- function(object, x) {
+  pred <- predict(object, as.matrix(x))
+  factor(ifelse(pred > 0.5, 1, 0), levels = c(0, 1))
+}
+
+xgbFuncs$rank <- function(object, x, y) {
+  imp <- xgb.importance(model = object)
+  imp_names <- imp$Feature
+  full <- data.frame(var = colnames(x), Overall = 0)
+  full$Overall[match(imp_names, full$var)] <- imp$Gain
+  full
+}
+
+set.seed(123)
+ctrl <- rfeControl(functions = xgbFuncs,
+                   method = "cv",
+                   number = 6,
+                   verbose = FALSE)
+
+sizes <- seq(2, ncol(x), by = 1)
+
+rfe_result <- rfe(x = x, y = y,
+                  sizes = sizes,
+                  rfeControl = ctrl)
+
+knitr::kable(data.frame(Zmienne=rfe_result$optVariables) )  
+plot(rfe_result, type = c("g", "o")) 
+
+
 ```
-Na podstawie przeprowadzonych testów na równość średnich w grupach można stwierdzić,że istnieją istotnie statystycznie różnice między wartościami powyższych zmiennych w grupach wyznaczonych przez zmienną `DNF`.
+
+Na wykresie Accuracy (Cross-Validation) vs Variables widać, że najwyższa trafność modelu została osiągnięta przy 9 zmiennych.Dalsze dodawanie cech nie poprawia skuteczności, a wręcz lekko ją pogarsza.To oznacza, że cechy dodane po 9-tej są prawdopodobnie nadmiarowe lub szumowe.
+
+## Podsumowanie
 
 ```{r}
+library(dplyr)
+library(knitr)
+
+
+
+mi_vars <- data.frame(Metoda = "MI", Zmienna = MI[1:7,1])
+mrmr_vars <- data.frame(Metoda = "mRMR", Zmienna = selected_variables)
+rfe_vars <- data.frame(Metoda = "RFE", Zmienna = rfe_result$optVariables)
+
+all_vars <- bind_rows(mi_vars, mrmr_vars, rfe_vars)
+
+kable(all_vars, format = "html", caption = "Zmiennie wybrane przez każdą metodę") %>%
+  kable_styling(full_width = F) %>%
+  row_spec(which(all_vars$Metoda == "MI"), background = "#ffd699") %>%
+  row_spec(which(all_vars$Metoda == "mRMR"), background = "#cce5ff") %>%
+  row_spec(which(all_vars$Metoda == "RFE"), background = "#d4edda")
+
+
+```
+
+Na podstawie otrzymanych podzbiorów zmiennych, tworzę zbiór unikalnych cech ze wszystkich wyznaczonych.
+
+```{r}
+# ----------------ZBIÓR UNIKALNYCH CECH --------------------
+
+library(dplyr)
+library(ggcorrplot)
+
+# Lista unikalnych zmiennych
+vars_all <- unique(c(rfe_vars$Zmienna, mrmr_vars$Zmienna, mi_vars$Zmienna))
+
+X <- formula_train[, vars_all]
+
+corr_matrix <- cor(X, use = "complete.obs")
+p_matrix <- cor_pmat(X)  
+
+ggcorrplot(round(corr_matrix,1), p.mat = p_matrix, lab = TRUE,type = "lower")
+
+#zmienne bardzo redundantne (0.8)
+to_remove <- findCorrelation(corr_matrix, cutoff = 0.8, names = TRUE)
+knitr::kable(data.frame(Zmienne_redundantne=to_remove))
+
+X_clean <- X[, !(names(X) %in% to_remove)]
+
+
+corr_matrix <- cor(X_clean, use = "complete.obs")
+p_matrix <- cor_pmat(X_clean) 
+
+ggcorrplot(round(corr_matrix,1),
+          p.mat = p_matrix,
+           lab = TRUE,
+           type = "lower")
+
+```
+
+Zatem na podstawie wykorzystanych metod selekcji zmiennych - MI,RFE,rMRM i analizie korelacji otrzymanych zmiennych w wyniku przeprowadzonej filtracji usuwam zmienne,charakteryzujące się współczynnikiem korelacji powyżej progu **0.8**, są to zatem zmienne `Lap.Time.Variation`,`Driver.Fast.Lap.Attempts`,`Position.Changes`.
+
+```{r}
+
+
+#wyselekcjonowane cechy 
+selected_features <- c(
+  "Laps",
+  "Wind_Speed_KMH",
+  "Humidity_.",
+  "Air_Temp_C",
+  "Tire.Usage.Aggression",
+  "Avg_stint_length",
+  "TotalPitStops",
+  "Driver.Fast.Lap.Attempts",
+  "Position.Changes",
+  "DNF" 
+)
+
+formula_train<-formula_train[,selected_features]
+
+formula_test<-formula_test[,selected_features]
+
+
+
+```
+
+## ANOVA
+
+### Testowanie normalności
+
+$$
+H_0: \text{Zmienne w i-tej grupe mają rozkład normalny}\\ 
+H_1: \text{Zmienne w i-tej grupie mają rozkład inny niż normalny}
+$$
+
+```{r}
+funkcja_normalnosc <- function(Y, x, data) {
+  wyniki <- list()
+
+  for (zmienna in x) {
+    for (grupa in levels(factor(data[[Y]]))) {
+      dane_grupy <- na.omit(data[[zmienna]][data[[Y]] == grupa])  # TO JEST KLUCZ
+
+      n <- length(dane_grupy)
+      n_unique <- length(unique(dane_grupy))
+
+      if (is.numeric(dane_grupy) && n >= 3 && n_unique >= 3) {
+        wynik <- tryCatch(shapiro.test(dane_grupy), error = function(e) NULL)
+        p <- if (!is.null(wynik)) wynik$p.value else NA
+      } else {
+        p <- NA
+      }
+
+      wyniki[[length(wyniki) + 1]] <- data.frame(
+        Zmienna = zmienna,
+        Grupa = grupa,
+        Obserwacje = n,
+        P_wartosc = p
+      )
+    }
+  }
+
+  df <- do.call(rbind, wyniki)
+  knitr::kable(df, digits = 4)
+}
+
+funkcja_normalnosc(Y = "DNF", x = selected_features[-10], data = formula_train)
+    
+```
+
+### Równość wariancji w grupach
+
+$$
+H_0:\sigma_1^2=\sigma_2^2\\
+H_1:\sigma_1^2 \ne \sigma_2^2
+$$
+
+```{r}
+funkcja_wariancja <- function(Y, x, data) {
+  if (length(unique(data[[Y]])) != 2) {
+    stop("Zmienna grupująca (Y) musi mieć dokładnie 2 poziomy.")
+  }
+  
+  if (!requireNamespace("car", quietly = TRUE)) {
+    stop("Do działania tej funkcji potrzebny jest pakiet 'car'. Zainstaluj go przez install.packages('car').")
+  }
+
+  data[[Y]] <- factor(data[[Y]])
+  
+  wyniki <- data.frame(
+    Zmienna = character(),
+    P_wartosc = numeric(),
+    stringsAsFactors = FALSE
+  )
+  
+  for (zmienna in x) {
+    if (!(zmienna %in% names(data))) {
+      warning(paste("Zmienna", zmienna, "nie istnieje w danych – pomijam."))
+      next
+    }
+    
+    formuła <- as.formula(paste(zmienna, "~", Y))
+    
+    wynik_testu <- tryCatch(
+      car::leveneTest(formuła, data = data),
+      error = function(e) NULL
+    )
+    
+    p_val <- if (!is.null(wynik_testu)) wynik_testu[1, "Pr(>F)"] else NA
+    
+    wyniki <- rbind(wyniki, data.frame(
+      Zmienna = zmienna,
+      P_wartosc = p_val,
+      stringsAsFactors = FALSE
+    ))
+  }
+  
+  return(knitr::kable(wyniki, digits = 4))
+}
+funkcja_wariancja(Y = "DNF", x = selected_features[-10], data = formula_train)
+
+```
+
+Z powodu nie spełnienia warunków o normalności rozkładów zmiennych w obu grupach oraz równości wariancji w grupach, przeprowadzę nieparametryczną wersję tego testu - test `Manna-Whitney'a`, w którym poddawana weryfikacji jest następująca hipoteza: $$
+H_0 : \tilde{X}_1 = \tilde{X}_2 \\
+H_1 : \tilde{X}_1 \neq \tilde{X}_2  
+$$
+
+```{r}
+
+test_wilcoxon_wiele <- function(Y, x, data) {
+  wyniki <- list()
+  
+  data[[Y]] <- factor(data[[Y]])
+
+  if (length(levels(data[[Y]])) != 2) {
+    stop("Zmienna grupująca (Y) musi mieć dokładnie 2 poziomy.")
+  }
+
+  for (zmienna in x) {
+    if (!(zmienna %in% colnames(data))) {
+      warning(paste("Zmienna", zmienna, "nie istnieje – pomijam."))
+      next
+    }
+
+    grupa1 <- na.omit(data[data[[Y]] == levels(data[[Y]])[1], zmienna][[1]])
+    grupa2 <- na.omit(data[data[[Y]] == levels(data[[Y]])[2], zmienna][[1]])
+
+    if (is.numeric(grupa1) && is.numeric(grupa2) &&
+        length(grupa1) >= 3 && length(grupa2) >= 3) {
+      wynik <- tryCatch(
+        wilcox.test(grupa1, grupa2),
+        error = function(e) NULL
+      )
+      p_val <- if (!is.null(wynik)) wynik$p.value else NA
+    } else {
+      p_val <- NA
+    }
+
+    wyniki[[length(wyniki) + 1]] <- data.frame(
+      Zmienna = zmienna,
+      P_wartosc = p_val
+    )
+  }
+
+  wynik_df <- do.call(rbind, wyniki)
+  return(knitr::kable(wynik_df, digits = 4))
+}
+
+test_wilcoxon_wiele(Y = "DNF", x = selected_features[-10], data = formula_train)
+
+
+
+```
+
+Na podstawie przeprowadzonych testów na równość median w grupach można stwierdzić,że istnieją istotnie statystycznie różnice między wartościami powyższych zmiennych w grupach wyznaczonych przez zmienną `DNF`, z wyjątkiem `Humidity_.` oraz `Air_temp`, co jest naturalne, gdyż wszyscy kierowcy zmagali się z tymi samymi warunkami pogodowymi.
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(plotly)
 
 najwiecej_dnf <- formula1 %>%
   mutate(
     Race.Name = as.factor(Race.Name),
     Country = as.factor(Country),
-    DNF = as.numeric(DNF)  # Upewniamy się, że DNF to liczby
+    DNF = as.numeric(DNF)
   ) %>%
   filter(!is.na(Race.Name), !is.na(Country), !is.na(DNF)) %>%
   group_by(Race.Name, Country) %>%
@@ -476,89 +910,65 @@ najwiecej_dnf <- formula1 %>%
   arrange(desc(suma_dnf)) %>%
   slice_max(suma_dnf, n = 20)
 
-
-library(ggplot2)
-
-ggplot(najwiecej_dnf, aes(x = reorder(paste(Race.Name, Country, sep = " - "), suma_dnf),
-                          y = suma_dnf, fill = Country)) +
+# 📊 ggplot z dodatkowymi informacjami w tooltipie
+p <- ggplot(najwiecej_dnf, aes(x = reorder(paste(Race.Name, Country, sep = " - "), suma_dnf),
+                               y = suma_dnf, fill = Country,
+                               text = paste("Grand Prix:", Race.Name,
+                                            "<br>Kraj:", Country,
+                                            "<br>DNF:", suma_dnf))) +
   geom_col() +
   coord_flip() +
   labs(title = "Top 20 torów z największą liczbą DNF",
        x = "Grand Prix", y = "Liczba DNF", fill = "Kraj") +
   theme_minimal()
 
-```
-
-
-```{r dnf_interactive_plot, echo=FALSE, warning=FALSE, message=FALSE, eval=interactive()}
-library(plotly)
-ggplotly(wykres)
-```
-
-
-## Badanie zależności predyktorów
-
-```{r}
-X<-formula1[c("Position","Position.Changes","Laps","TOP3","Avg_stint_length","Tire.Usage.Aggression","Wind_Speed_KMH")]
-
-p<- cor_pmat(cor(X,use="pairwise.complete.obs"))
-
-
-
-X %>% 
-  cor(use="pairwise.complete.obs") %>% 
-  ggcorrplot(p.mat=p,lab=TRUE)
-
-
-
-#zmienną wind_speed można wyrzucic
-#position.changes zostawic a position out, bo position.changes ma większy sens predykcyjny do problemu 
+# ✨ Interaktywna wersja z plotly
+ggplotly(p, tooltip = "text")
 
 ```
 
-Macierz korelacji ujawnia istotne współzależności między częścią predyktorów, szczególnie `Position`, `Position.Changes`, `TOP3` i `Laps`. Zmienne te są częściowo redundantne i mogą prowadzić do współliniowości w modelach liniowych. Z kolei zmienne takie jak `Wind_Speed_KMH` i `Tire.Usage.Aggression` wykazują niską korelację z pozostałymi, co może świadczyć o ich niezależnym wkładzie informacyjnym.
+Powyższy wykres przedstawia 20 torów wyścigowych, które charakteryzował największy odsetek nieukończonych wyścigów.
 
-
-## Segmentacja warunków pogodowych 
+# Segmentacja warunków pogodowych
 
 ```{r}
 library(dplyr)
 library(ggplot2)
-library(factoextra)  
+library(factoextra)
 
+weather_vars <- c("Air_Temp_C", "Track_Temp_C", "Humidity_.", "Wind_Speed_KMH")
 
-weather_data <- data2 %>%
-  select(Air_Temp_C, Track_Temp_C, Humidity_., Wind_Speed_KMH) %>%
-  na.omit() 
+valid_rows <- complete.cases(formula1[, weather_vars])
+
+weather_data <- formula1[valid_rows, weather_vars]
 weather_scaled <- scale(weather_data)
-
 
 set.seed(123)
 kmeans_weather <- kmeans(weather_scaled, centers = 3, nstart = 20)
 
-formula1$Weather_Cluster <- factor(kmeans_weather$cluster)
+formula_naomit <- formula1[valid_rows, ]
+formula_naomit$Weather_Cluster <- factor(kmeans_weather$cluster)
 
-table(formula1$Weather_Cluster)
 
-chisq_test_result <- chisq.test(table(formula1$Weather_Cluster, formula1$TOP3))
-test<-chisq_test_dnf<-chisq.test(table(formula1$Weather_Cluster, formula1$DNF))
-print(test)
-test$stdres
-ggplot(formula1, aes(x = Weather_Cluster, fill = as.factor(DNF))) +
+test <- chisq.test(table(formula_naomit$Weather_Cluster, formula_naomit$DNF))
+
+knitr::kable(test$stdres)
+
+ggplot(formula_naomit, aes(x = Weather_Cluster, fill = as.factor(DNF))) +
   geom_bar(position = "fill") +
-  labs(title = "DNF w różnych klasach pogodowych (KMeans)", x = "Klaster Pogodowy", y = "Proporcja", fill = "TOP3") +
+  labs(title = "DNF w różnych klasach pogodowych (KMeans)",
+       x = "Klaster Pogodowy", y = "Proporcja", fill = "DNF") +
   theme_minimal()
 
 ```
-Na podstawie wykresu i przeprowadzonego testu $\chi^2$ można stwierdzić, że mimo iż zmienne pogodowe były nieinformatywne, to pogoda i DNF nie są niezależne. Na podstawie reszt residualnych, które dla pierwszego klastra w klasie DNF=0 są większe od 2, można stwierdzić ,że w tym klastrze jest więcej ukończonych wyścigów, mniej DNF niż oczekiwano — bezpieczne warunki.
-Dla drugiego klastra mamy reszty bliskie 0, co oznacza, że w tym klastrze panują umiarkowane warunki, wyścig ukończyło tyle kierowców, ile przeciętnie.
-Dla trzeciego klastra więcej kierowców nie ukończyło wyścigu niż oczekiwano, zatem w tym klastrze skupione są mniej bezpieczne warunki- bardziej ryzykowne. 
+
+Na podstawie wykresu i przeprowadzonego testu $\chi^2$ można stwierdzić, że mimo iż zmienne pogodowe były nieinformatywne, to pogoda i DNF nie są niezależne. Na podstawie reszt residualnych, które dla pierwszego klastra w klasie DNF=0 są większe od 2, można stwierdzić ,że w tym klastrze jest więcej ukończonych wyścigów, mniej DNF niż oczekiwano — bezpieczne warunki. Dla drugiego klastra mamy reszty bliskie 0, co oznacza, że w tym klastrze panują umiarkowane warunki, wyścig ukończyło tyle kierowców, ile przeciętnie. Dla trzeciego klastra więcej kierowców nie ukończyło wyścigu niż oczekiwano, zatem w tym klastrze skupione są mniej bezpieczne warunki- bardziej ryzykowne.
+
 ```{r}
 library(dplyr)
 library(ggplot2)
 
-# 1. Grupowanie i liczenie średnich
-summary_weather <- formula1 %>%
+summary_weather <- formula_naomit %>%
   group_by(Weather_Cluster) %>%
   summarise(
     avg_air_temp = mean(Air_Temp_C, na.rm = TRUE),
@@ -568,10 +978,8 @@ summary_weather <- formula1 %>%
     .groups = "drop"
   )
 
-# 2. Podgląd tabeli
-print(summary_weather)
+knitr::kable(summary_weather)
 
-# 3. Rysowanie wykresu — np. wykres słupkowy dla każdej zmiennej
 summary_weather_long <- summary_weather %>%
   pivot_longer(cols = -Weather_Cluster, names_to = "Variable", values_to = "Mean_Value")
 
@@ -582,26 +990,27 @@ ggplot(summary_weather_long, aes(x = Weather_Cluster, y = Mean_Value, fill = Var
   theme_minimal()
 
 ```
-Powyższa wizualizacja i tabela podsumowują wnioski z analizy reszt residualnych dla przeprowadzonego testu chi kwadrat. 
+
+Powyższa wizualizacja i tabela podsumowują wnioski z analizy reszt residualnych dla przeprowadzonego testu chi kwadrat.
 
 `Klaster 1` (najbezpieczniejszy ):
 
-- Średnia wilgotność (avg_humidity): bardzo wysoka,
-- Temperatura powietrza i toru: umiarkowana,
-- Wiatr : umiarkowany
+-   Średnia wilgotność (avg_humidity): bardzo wysoka,
+-   Temperatura powietrza i toru: umiarkowana,
+-   Wiatr : umiarkowany
 
-`Klaster 2 `:
+`Klaster 2`:
 
-- Najwyższa temperatura toru i powietrza, niższa wilgotność,
-- Wiatr: nieco niższy niż w klastrze 1.
+-   Najwyższa temperatura toru i powietrza, niższa wilgotność,
+-   Wiatr: nieco niższy niż w klastrze 1.
 
-`Klaster 3 `:
+`Klaster 3`:
 
-- Najniższe temperatury powietrza i toru,
-- Bardzo wysoka wilgotność,
-- Najniższa prędkość wiatru.
+-   Najniższe temperatury powietrza i toru,
+-   Bardzo wysoka wilgotność,
+-   Najniższa prędkość wiatru.
 
-## Segmentacja stylu jazdy kierowców 
+# Segmentacja stylu jazdy kierowców
 
 ```{r}
 zmienne2 <- c("Driver.Aggression.Score", "Lap.Time.Variation", "Avg_stint_length","Laps","Tire.Usage.Aggression","Wind_Speed_KMH","AvgPitStopTime")
@@ -643,25 +1052,64 @@ tabelka_kierowcy_klastry<-formula1_2 %>%
             Tire.Usage.Aggression=mean(Tire.Usage.Aggression),
             DNF_perc=(sum(as.numeric(DNF))/n())*100
             )
-tabelka_kierowcy_klastry
+knitr::kable(tabelka_kierowcy_klastry)
 
 ```
-Kierowców udało się pogrupować w cztery wyraźnie różniące się klastry. Najbardziej agresywni i niestabilni (klaster 4) nie charakteryzują się najwyższym ryzykiem DNF. Największe ryzyko nie ukończenia wyścigu mieli kierowcy znajdujący się w klastrach 2 i 3. Większość zawodników należy do bardziej zachowawczych grup, co może przekładać się na większą skuteczność w kończeniu wyścigów. Segmentacja potwierdza, że styl jazdy wpływa na przebieg i wynik rywalizacji jednak różnice w jeździe kierowców, którzy nie ukończyli wyścigów są subtelne. 
 
-# Modelowanie 
+Kierowców udało się pogrupować w cztery wyraźnie różniące się klastry. Najbardziej agresywni i niestabilni (klaster 4) nie charakteryzują się najwyższym ryzykiem DNF. Największe ryzyko nie ukończenia wyścigu mieli kierowcy znajdujący się w klastrach 2 i 3. Większość zawodników należy do bardziej zachowawczych grup, co może przekładać się na większą skuteczność w kończeniu wyścigów. Segmentacja potwierdza, że styl jazdy wpływa na przebieg i wynik rywalizacji jednak różnice w jeździe kierowców, którzy nie ukończyli wyścigów są subtelne.
+
+# Modelowanie
+
+W ramach etapu modelowania zdecydowałam się posłużyć następującymi algorytmami: `Linear Regression`, `Random Forest`,`XGBOOST`,`Regularized Discriminant Analysis`,`KNN`,`SVM`. Aby ocenić poprawność działania modeli posłużyłam się miarami **accuracy** i z racji niezbalansowania klas - **F1**.
+
+$$
+accuracy=\frac{TP+TN}{TP+TN+FP+FN}
+$$
+
+$$
+F1=2 \cdot \frac{Precision \cdot Recall}{Precision +Recall}
+$$
+
+$$
+Precision=\frac{TP}{TP+FP}
+$$
+
+$$
+Recall=\frac{TP}{TP+FN}
+$$
+
+Gdzie:
+
+-   *TP* – True Positives (prawidłowo zaklasyfikowane pozytywne przypadki)
+
+<!-- -->
+
+-    *TN* – True Negatives (prawidłowo zaklasyfikowane negatywne przypadki)
+
+-    *FP* – False Positives (fałszywie pozytywne przypadki)
+
+<!-- -->
+
+-   *FN* – False Negatives (fałszywie negatywne przypadki)
+
+**Modele były testowane na różnych wariantach zbioru danych:**
+
+-   oryginalnym
+
+-   po imputacji braków
+
+-   po imputacji braków wraz i balansowaniu klas metodą SMOTE
+
+-   zbiór po undersamplingu klasy dominującej
 
 ```{r}
 set.seed(2024)
 library(tidymodels)
-formula1$DNF<-factor(formula1$DNF,levels=c(0,1))
-X<-c("Position.Changes","Driver.Aggression.Score","Avg_stint_length","Tire.Usage.Aggression","Fast.Lap.Attempts","DNF")
+formula_train<-formula_train[-c(3,4)]
+formula_test<-formula_test[-c(3,4)]
 
-formula11<-formula1[X]
-
-split_f1<-initial_split(formula11,0.8)
-Train_original_f1<-training(split_f1)
-Test_original_f1<-testing(split_f1)
-
+Train_original_f1<-formula_train[-c(3,4)]
+Test_original_f1<- formula_test[-c(3,4)]
 
 
 ```
@@ -682,23 +1130,73 @@ accuracy_per_class<-function(confusion_matrix){
 }
 ```
 
-
 ```{r}
-recipe_original_f1<-recipe(DNF~.,
-                           data=Train_original_f1) %>% 
-  step_normalize(all_numeric_predictors()) %>% 
-  step_dummy(all_nominal_predictors())
-
-prep_reicpe_original<-prep(recipe_original_f1)
-
-Train_original_f11<-bake(prep_reicpe_original,new_data=NULL)
-
-Test_original_f11<-bake(prep_reicpe_original,new_data=Test_original_f1)
-
+f1_table_both_classes <- function(conf_matrix_train, conf_matrix_test, model_name = "MODEL") {
+  
+  extract_f1 <- function(cm, class = "1") {
+    m <- cm$table
+    if (class == "1") {
+      TP <- m[2, 2]
+      FP <- m[1, 2]
+      FN <- m[2, 1]
+    } else if (class == "0") {
+      TP <- m[1, 1]
+      FP <- m[2, 1]
+      FN <- m[1, 2]
+    }
+    precision <- TP / (TP + FP)
+    recall <- TP / (TP + FN)
+    f1 <- 2 * precision * recall / (precision + recall)
+    return(f1)
+  }
+  
+  # Obliczenia dla TRAIN
+  f1_train_1 <- extract_f1(conf_matrix_train, class = "1")
+  f1_train_0 <- extract_f1(conf_matrix_train, class = "0")
+  f1_train_avg <- mean(c(f1_train_0, f1_train_1), na.rm = TRUE)
+  
+  # Obliczenia dla TEST
+  f1_test_1  <- extract_f1(conf_matrix_test,  class = "1")
+  f1_test_0  <- extract_f1(conf_matrix_test,  class = "0")
+  f1_test_avg <- mean(c(f1_test_0, f1_test_1), na.rm = TRUE)
+  
+  # Składanie wiersza
+  f1_vector <- round(c(
+    f1_train_avg, f1_train_0, f1_train_1,
+    f1_test_avg,  f1_test_0,  f1_test_1
+  ), 4)
+  
+  results_f1_dataframe <- data.frame(t(f1_vector))
+  
+  colnames(results_f1_dataframe) <- c(
+    "Train-Global", "Train-Class0", "Train-Class1",
+    "Test-Global", "Test-Class0", "Test-Class1"
+  )
+  
+  rownames(results_f1_dataframe) <- model_name
+  
+  return(results_f1_dataframe)
+}
 
 ```
 
 ```{r}
+recipe_original_f1<-recipe(DNF~.,
+                           data=Train_original_f1) %>% 
+  step_normalize(all_numeric_predictors())
+
+prep_recipe_original<-prep(recipe_original_f1)
+
+Train_original_f11<-bake(prep_recipe_original,new_data=NULL)
+Train_original_f11 <- as.data.frame(Train_original_f11)
+
+Test_original_f11<-bake(prep_recipe_original,new_data=Test_original_f1)
+Test_original_f11<-as.data.frame(Test_original_f11)
+
+```
+
+```{r}
+library(dplyr)
 #lasek do klasyfikacji 
 
 random_forest<-rand_forest(mode="classification") %>%
@@ -715,7 +1213,7 @@ train_preds<-predict(random_forest_fitting,
                      type="prob")%>%
  bind_cols(predict(random_forest_fitting,
                    Train_original_f11)) %>%
- bind_cols(Train_original_f11 %>% select(DNF))
+ bind_cols(dplyr::select(Train_original_f11,DNF))
 
 train_metrics<-metrics(
   
@@ -740,7 +1238,7 @@ test_preds<-predict(random_forest_fitting,
                     type="prob") %>% 
   bind_cols(predict(random_forest_fitting,
                     Test_original_f11)) %>% 
-  bind_cols(Test_original_f11 %>% select(DNF))
+  bind_cols(dplyr::select(Test_original_f11 ,DNF))
 test_metrics<-metrics(
   test_preds,
   truth=DNF,
@@ -775,6 +1273,15 @@ colnames(results_dataframe)<-c(
 )
 
 rownames(results_dataframe)<-"Original Dataset (RF)"
+
+
+
+
+#---------------F1
+
+results_f1_RF <- f1_table_both_classes(conf_matrix_train_RF, conf_matrix_test_RF, model_name = "Original Dataset (RF)")
+
+
 ```
 
 ```{r}
@@ -794,7 +1301,7 @@ regresja_train_preds<-predict(regresja_fit,
                         type="prob") %>% 
   bind_cols(predict(regresja_fit,
                    Train_original_f11)) %>%
- bind_cols(Train_original_f11 %>% select(DNF))
+ bind_cols(dplyr::select(Train_original_f11 ,DNF))
 
 train_preds_regression<-metrics(
   regresja_train_preds,
@@ -807,7 +1314,7 @@ test_preds_regression<-predict(regresja_fit,
                         type="prob") %>% 
   bind_cols(predict(regresja_fit,
                    Test_original_f11)) %>%
- bind_cols(Test_original_f11 %>% select(DNF))
+ bind_cols(dplyr::select(Test_original_f11 ,DNF))
 
 test_metrics_regression<-metrics(
   
@@ -837,6 +1344,12 @@ results_accuracy_lr<-c(train_preds_regression$.estimate[[1]],
 results_dataframe<-rbind(results_dataframe,round(results_accuracy_lr,2))
 rownames(results_dataframe)[2]<-"Original Dataset (LR)"
 
+
+#---------------F1
+results_f1_LR <- f1_table_both_classes(CM_train_LR, CM_test_LR, model_name = "Original Dataset (LR)")
+
+results_F1<-rbind(results_f1_RF,results_f1_LR)
+
 ```
 
 ```{r}
@@ -854,14 +1367,14 @@ xgboost_pred_train<-predict(xgboost_fit,
                         type="prob") %>% 
   bind_cols(predict(xgboost_fit,
                    Train_original_f11)) %>%
- bind_cols(Train_original_f11 %>% select(DNF))
+ bind_cols(dplyr::select(Train_original_f11 ,DNF))
 
 xgboost_pred_test<-predict(xgboost_fit,
                         Test_original_f11,
                         type="prob") %>% 
   bind_cols(predict(xgboost_fit,
                    Test_original_f11)) %>%
- bind_cols(Test_original_f11 %>% select(DNF))
+ bind_cols(dplyr::select(Test_original_f11 ,DNF))
 
 train_metrics_xgboost<-metrics(
   xgboost_pred_train,
@@ -897,13 +1410,100 @@ results_accuracy_xgboost<-c(train_metrics_xgboost$.estimate[[1]],
 results_dataframe<-rbind(results_dataframe,round(results_accuracy_xgboost,2))
 rownames(results_dataframe)[3]<-"Original Dataset (xgboost)"
 
+
+#---------------F1
+results_f1_XGBOOST <- f1_table_both_classes(CM_xgboost_train, CM_xgboost_test, model_name = "Original Dataset (XGBOOST)")
+
+results_F1<-rbind(results_F1,results_f1_XGBOOST)
+
+```
+
+## Regularized Discriminant Analysis
+
+W celu selekcji zmiennych do modelu przeprowadzona miała zostać LDA , jednak z racji nie spełnienia założeń o normalności rozkładów w klasach oraz niejednorodności macierzy kowariacji, zastosowane zostanie Regularized Discriminant Analysis.Metoda ta radzi sobie z naruszeniem założenia o normalności oraz jednorodności macierzy kowariancji i działa nawet przy zachowaniu współliniowości między zmiennymi.
+
+```{r}
+#rda 
+
+library(dplyr)
+library(caret)
+library(klaR)
+library(caTools)  
+library(MASS)     
+
+
+nzv_info <- nearZeroVar(formula_train, saveMetrics = TRUE)
+
+df <- formula_train[, !nzv_info$zeroVar]
+
+df_test<-formula_test[, !nzv_info$zeroVar]
+rda_model <- rda(DNF ~ ., data = df)
+
+
+rda_pred <- predict(rda_model, df[, -which(names(df) == "DNF")])$class
+#knitr::kable(confusionMatrix(rda_pred, df_test$DNF)$table,caption = "Confusion Matrix: RDA")
+
+
+rda_pred_test <- predict(rda_model, df_test[, -which(names(df_test) == "DNF")])$class
+
+# Confusion matrices
+conf_matrix_train_RDA <- confusionMatrix(rda_pred, df$DNF)
+
+conf_matrix_test_RDA  <- confusionMatrix(rda_pred_test, df_test$DNF)
+
+results_accuracy_RDA <- c(
+  conf_matrix_train_RDA$overall["Accuracy"],
+  accuracy_per_class(conf_matrix_train_RDA),
+  conf_matrix_test_RDA$overall["Accuracy"],
+  accuracy_per_class(conf_matrix_test_RDA)
+)
+
+results_dataframe<-rbind(results_dataframe,round(results_accuracy_RDA,2))
+rownames(results_dataframe)[4]<-"Original Dataset RDA"
+
+#---------------F1
+results_f1_RDA <- f1_table_both_classes(conf_matrix_train_RDA, conf_matrix_test_RDA, model_name = "Original Dataset (RDA)")
+
+results_F1<-rbind(results_F1,results_f1_RDA)
+
+
 ```
 
 ## Imputacja braków
 
 ```{r}
-print("Liczebność klas zmiennej DNF")
-table(formula11$DNF) #delikatnie niezbalansowane klasy
+missing_df <- data.frame(
+  Zmienna = colnames(formula1),
+  Liczba_NA = colSums(is.na(formula1))
+)
+
+kable(missing_df, caption = "Liczba braków danych w każdej kolumnie",row.names = FALSE)
+```
+
+## Balansowanie klas
+
+```{r}
+
+
+features <- c(
+  "Laps",
+  "Wind_Speed_KMH",
+  "Tire.Usage.Aggression",
+  "Avg_stint_length",
+  "TotalPitStops",
+  "Driver.Fast.Lap.Attempts",
+  "Position.Changes",
+  "DNF"
+)
+
+formula11<-formula1[,features]
+
+
+tabelka<-as.data.frame(table(formula11$DNF)) #delikatnie niezbalansowane klasy
+names(tabelka)[names(tabelka) == "Var1"] <- "Klasa"
+names(tabelka)[names(tabelka) == "Freq"] <- "Częstość występowania"
+knitr::kable(tabelka)
+
 
 split_imputed_f1<-initial_split(formula11,0.8)
 train_imputed_f1<-training(split_imputed_f1)
@@ -942,7 +1542,7 @@ train_preds_imputed<-predict(random_forest_fitting1,
                      type="prob")%>%
  bind_cols(predict(random_forest_fitting1,
                    train_imputation)) %>%
- bind_cols(train_imputation %>% select(DNF))
+ bind_cols(dplyr::select(train_imputation,DNF))
 
 train_metrics_imputed<-metrics(
   
@@ -967,7 +1567,7 @@ test_preds_imputed<-predict(random_forest_fitting1,
                     type="prob") %>% 
   bind_cols(predict(random_forest_fitting1,
                     test_imputation)) %>% 
-  bind_cols(test_imputation %>% select(DNF))
+  bind_cols(dplyr::select(test_imputation,DNF))
 test_metrics_imputed<-metrics(
   test_preds_imputed,
   truth=DNF,
@@ -988,7 +1588,13 @@ results_accuracy_RF_imputed<-c(train_metrics_imputed$.estimate[[1]],
                     accuracy_per_class(conf_matrix_test_RF_imputed))
 
 results_dataframe<-rbind(results_dataframe,round(results_accuracy_RF_imputed,2))
-rownames(results_dataframe)[4]<-"RF Imputed"
+rownames(results_dataframe)[5]<-"RF Imputed"
+
+
+#---------------F1
+results_f1_imputed_RF <- f1_table_both_classes(conf_matrix_train_RF_imputed, conf_matrix_test_RF_imputed, model_name = "Imputed Dataset (RF)")
+
+results_F1<-rbind(results_F1,results_f1_imputed_RF)
 ```
 
 ```{r}
@@ -1005,7 +1611,7 @@ regresja_fit <- fit(regresja, DNF ~ ., data = train_imputation)
 
 regresja_train_preds <- predict(regresja_fit, train_imputation, type = "prob") %>% 
   bind_cols(predict(regresja_fit, train_imputation)) %>%
-  bind_cols(train_imputation %>% select(DNF))
+  bind_cols(dplyr::select(train_imputation,DNF))
 
 
 train_metrics <- metrics(regresja_train_preds, truth = DNF, estimate = .pred_class)
@@ -1013,7 +1619,7 @@ train_metrics <- metrics(regresja_train_preds, truth = DNF, estimate = .pred_cla
 
 regresja_test_preds <- predict(regresja_fit, test_imputation, type = "prob") %>% 
   bind_cols(predict(regresja_fit, test_imputation)) %>%
-  bind_cols(test_imputation %>% select(DNF))
+  bind_cols(dplyr::select(test_imputation,DNF))
 
 
 test_metrics <- metrics(regresja_test_preds, truth = DNF, estimate = .pred_class)
@@ -1032,8 +1638,12 @@ results_accuracy <- c(
 )
 
 results_dataframe <- rbind(results_dataframe, round(results_accuracy, 2))
-rownames(results_dataframe)[nrow(results_dataframe)] <- "LR Imputed"
+rownames(results_dataframe)[6] <- "LR Imputed"
 
+#---------------F1
+results_f1_imputed_LR <- f1_table_both_classes(cm_train, cm_test, model_name = "Imputed Dataset (LR)")
+
+results_F1<-rbind(results_F1,results_f1_imputed_LR)
 
 ```
 
@@ -1053,14 +1663,14 @@ xgboost_pred_train_imputed<-predict(xgboost_fit1,
                         type="prob") %>% 
   bind_cols(predict(xgboost_fit1,
                    train_imputation)) %>%
- bind_cols(train_imputation %>% select(DNF))
+ bind_cols(dplyr::select(train_imputation,DNF))
 
 xgboost_pred_test_imputed<-predict(xgboost_fit1,
                         test_imputation,
                         type="prob") %>% 
   bind_cols(predict(xgboost_fit1,
                    test_imputation)) %>%
- bind_cols(test_imputation %>% select(DNF))
+ bind_cols(dplyr::select(test_imputation,DNF))
 
 train_metrics_xgboost_imputed<-metrics(
   xgboost_pred_train_imputed,
@@ -1096,14 +1706,163 @@ results_accuracy_XGBOOST_imputed<-c(train_metrics_xgboost_imputed$.estimate[[1]]
                     accuracy_per_class(CM_xgboost_test_imputed))
 
 results_dataframe<-rbind(results_dataframe,round(results_accuracy_XGBOOST_imputed,2))
-rownames(results_dataframe)[6]<-"XGBOOST Imputed"
+rownames(results_dataframe)[7]<-"XGBOOST Imputed"
 
+
+#---------------F1
+results_f1_imputed_XGBOOST <- f1_table_both_classes(CM_xgboost_train_imputed, CM_xgboost_test_imputed, model_name = "Imputed Dataset (XGBOOST)")
+
+results_F1<-rbind(results_F1,results_f1_imputed_XGBOOST)
+
+```
+
+```{r}
+SVM <- svm_linear(mode = "classification") %>% 
+  set_engine("LiblineaR")
+
+SVM_fit <- fit(SVM,
+               DNF ~ .,
+               data = train_imputation)
+
+# --- Train predictions ---
+SVM_pred_train <- predict(SVM_fit, train_imputation) %>%
+  bind_cols(dplyr::select(train_imputation, DNF))
+
+# --- Test predictions ---
+SVM_pred_test <- predict(SVM_fit, test_imputation) %>%
+  bind_cols(dplyr::select(test_imputation, DNF))
+
+# --- Metrics ---
+train_metrics_SVM <- metrics(
+  SVM_pred_train,
+  truth = DNF,
+  estimate = .pred_class
+)
+
+test_metrics_SVM <- metrics(
+  SVM_pred_test,
+  truth = DNF,
+  estimate = .pred_class
+)
+
+# --- Confusion matrices ---
+CM_SVM_train <- conf_mat(SVM_pred_train, truth = DNF, estimate = .pred_class)
+CM_SVM_test  <- conf_mat(SVM_pred_test,  truth = DNF, estimate = .pred_class)
+
+# --- Accuracy vector ---
+results_accuracy_SVM <- c(
+  train_metrics_SVM$.estimate[[1]],
+  accuracy_per_class(CM_SVM_train),
+  test_metrics_SVM$.estimate[[1]],
+  accuracy_per_class(CM_SVM_test)
+)
+
+results_dataframe <- rbind(results_dataframe, round(results_accuracy_SVM, 2))
+rownames(results_dataframe)[8] <- "SVM Imputed"
+
+
+
+#---------------F1
+results_f1_imputed_SVM <- f1_table_both_classes(CM_SVM_train, CM_SVM_test, model_name = "Imputed Dataset (SVM)")
+
+results_F1<-rbind(results_F1,results_f1_imputed_SVM)
+```
+
+```{r}
+# KNN
+
+# --- MODEL KNN ---
+KNN <- nearest_neighbor(mode = "classification", neighbors = 5) %>%
+  set_engine("kknn")
+
+KNN_fit <- fit(KNN,
+               DNF ~ .,
+               data = train_imputation)
+
+# --- Train predictions ---
+KNN_pred_train <- predict(KNN_fit, train_imputation,type='prob') %>%
+  bind_cols(predict(KNN_fit, train_imputation)) %>%
+  bind_cols(dplyr::select(train_imputation, DNF))
+
+# --- Test predictions ---
+KNN_pred_test <- predict(KNN_fit, test_imputation,type='prob') %>%
+  bind_cols(predict(KNN_fit, test_imputation)) %>%
+  bind_cols(dplyr::select(test_imputation, DNF))
+
+# --- Metrics ---
+train_metrics_KNN <- metrics(
+  KNN_pred_train,
+  truth = DNF,
+  estimate = .pred_class
+)
+
+test_metrics_KNN <- metrics(
+  KNN_pred_test,
+  truth = DNF,
+  estimate = .pred_class
+)
+
+# --- Confusion matrices ---
+CM_KNN_train <- conf_mat(KNN_pred_train, truth = DNF, estimate = .pred_class)
+CM_KNN_test  <- conf_mat(KNN_pred_test,  truth = DNF, estimate = .pred_class)
+
+# --- Accuracy vector ---
+results_accuracy_KNN <- c(
+  train_metrics_KNN$.estimate[[1]],
+  accuracy_per_class(CM_KNN_train),
+  test_metrics_KNN$.estimate[[1]],
+  accuracy_per_class(CM_KNN_test)
+)
+
+results_dataframe <- rbind(results_dataframe, round(results_accuracy_KNN, 2))
+rownames(results_dataframe)[9] <- "KNN Imputed"
+
+# --- F1 table ---
+results_f1_imputed_KNN <- f1_table_both_classes(CM_KNN_train, CM_KNN_test, model_name = "Imputed Dataset (KNN)")
+results_F1 <- rbind(results_F1, results_f1_imputed_KNN)
 
 
 ```
 
-## Imputacja + SMOTE 
+```{r}
+#RDA
 
+nzv_info_imputed <- nearZeroVar(train_imputation, saveMetrics = TRUE)
+
+df_imputed <- train_imputation[, !nzv_info_imputed$zeroVar]
+
+df_test_imputed<-test_imputation[, !nzv_info_imputed$zeroVar]
+rda_model_imputed <- rda(DNF ~ ., data = df_imputed)
+
+
+rda_pred_imputed <- predict(rda_model_imputed, df_imputed[, -which(names(df_imputed) == "DNF")])$class
+#knitr::kable(confusionMatrix(rda_pred, df_test$DNF)$table,caption = "Confusion Matrix: RDA")
+
+
+rda_pred_test_imputed <- predict(rda_model_imputed, df_test_imputed[, -which(names(df_test_imputed) == "DNF")])$class
+
+# Confusion matrices
+conf_matrix_train_RDA_imputed <- confusionMatrix(rda_pred_imputed, df_imputed$DNF)
+
+conf_matrix_test_RDA_imputed  <- confusionMatrix(rda_pred_test_imputed, df_test_imputed$DNF)
+
+results_accuracy_RDA_imputed <- c(
+  conf_matrix_train_RDA_imputed$overall["Accuracy"],
+  accuracy_per_class(conf_matrix_train_RDA_imputed),
+  conf_matrix_test_RDA_imputed$overall["Accuracy"],
+  accuracy_per_class(conf_matrix_test_RDA_imputed)
+)
+
+results_dataframe<-rbind(results_dataframe,round(results_accuracy_RDA_imputed,2))
+rownames(results_dataframe)[10]<-"Imputed Dataset RDA"
+
+#---------------F1
+results_f1_RDA_imputed <- f1_table_both_classes(conf_matrix_train_RDA_imputed, conf_matrix_test_RDA_imputed, model_name = "Imputed Dataset (RDA)")
+
+results_F1<-rbind(results_F1,results_f1_RDA_imputed)
+
+
+```
 
 ```{r}
 library(tidymodels)
@@ -1133,7 +1892,6 @@ Test_SMOTE<-bake(prep_smote,
   
 ```
 
-
 ```{r}
 #LASEK
 
@@ -1149,14 +1907,15 @@ Train_Preds_RF_SMOTE <- predict(random_forest_fitting_RF_SMOTE,
                       type = "prob") %>%
  bind_cols(predict(random_forest_fitting_RF_SMOTE,
                    Train_SMOTE)) %>%
- bind_cols(Train_SMOTE %>% select(DNF))
+ bind_cols(dplyr::select(Train_SMOTE,DNF))
 # Prediction - Test
 Test_Preds_RF_SMOTE <- predict(random_forest_fitting_RF_SMOTE,
                      Test_SMOTE,
                      type = "prob") %>%
  bind_cols(predict(random_forest_fitting_RF_SMOTE,
                    Test_SMOTE)) %>%
- bind_cols(Test_SMOTE %>% select(DNF))
+  bind_cols(dplyr::select(Test_SMOTE,DNF))
+
 
 
 Train_Metrics_RF_SMOTE <- metrics(Train_Preds_RF_SMOTE,
@@ -1181,11 +1940,14 @@ results_accuracy_RF_SMOTE<-c(Train_Metrics_RF_SMOTE$.estimate[[1]],
                     accuracy_per_class(Test_CM_RF_SMOTE))
 
 results_dataframe<-rbind(results_dataframe,round(results_accuracy_RF_SMOTE,2))
-rownames(results_dataframe)[7]<-"RF SMOTE"
+rownames(results_dataframe)[11]<-"RF SMOTE"
+
+
+#---------------F1
+results_f1_SMOTE_RF <- f1_table_both_classes(Train_CM_RF_SMOTE,Test_CM_RF_SMOTE, model_name = " RF SMOTE ")
+
+results_F1<-rbind(results_F1,results_f1_SMOTE_RF)
 ```
-
-
-
 
 ```{r}
 #REGRESJA LOGISTYCZNA 
@@ -1205,14 +1967,16 @@ Train_Preds_SMOTE <- predict(logistic_regression_fitting_SMOTE,
                       type = "prob") %>%
  bind_cols(predict(logistic_regression_fitting_SMOTE,
                    Train_SMOTE)) %>%
- bind_cols(Train_SMOTE %>% select( DNF))
+  bind_cols(dplyr::select(Train_SMOTE,DNF))
+
 # Prediction - Test
 Test_Preds_SMOTE <- predict(logistic_regression_fitting_SMOTE,
                      Test_SMOTE,
                      type = "prob") %>%
  bind_cols(predict(logistic_regression_fitting_SMOTE,
                    Test_SMOTE)) %>%
- bind_cols(Test_SMOTE %>% select( DNF))
+  bind_cols(dplyr::select(Test_SMOTE,DNF))
+
 # Train Metrics
 Train_Metrics_SMOTE <- metrics(Train_Preds_SMOTE,
                         truth =  DNF,
@@ -1239,10 +2003,13 @@ results_accuracy_LR_SMOTE<-c(Train_Metrics_SMOTE$.estimate[[1]],
 
 
 results_dataframe<-rbind(results_dataframe,round(results_accuracy_LR_SMOTE,2))
-rownames(results_dataframe)[8]<-"LR SMOTE"
+rownames(results_dataframe)[12]<-"LR SMOTE"
 
+#---------------F1
+results_f1_SMOTE_LR <- f1_table_both_classes(Train_CM_SMOTE,Test_CM_SMOTE, model_name = " LR SMOTE ")
+
+results_F1<-rbind(results_F1,results_f1_SMOTE_LR)
 ```
-
 
 ```{r}
 #XGBOOST
@@ -1260,14 +2027,16 @@ xgboost_pred_train_SMOTE<-predict(xgboost_fit_SMOTE,
                         type="prob") %>% 
   bind_cols(predict(xgboost_fit_SMOTE,
                    Train_SMOTE)) %>%
- bind_cols(Train_SMOTE %>% select(DNF))
+  bind_cols(dplyr::select(Train_SMOTE,DNF))
+
 
 xgboost_pred_test_SMOTE<-predict(xgboost_fit_SMOTE,
                         Test_SMOTE,
                         type="prob") %>% 
   bind_cols(predict(xgboost_fit_SMOTE,
                    Test_SMOTE)) %>%
- bind_cols(Test_SMOTE %>% select(DNF))
+  bind_cols(dplyr::select(Test_SMOTE,DNF))
+
 
 train_metrics_xgboost_SMOTE<-metrics(
   xgboost_pred_train_SMOTE,
@@ -1302,13 +2071,190 @@ results_accuracy_XGBOOST_SMOTE<-c(train_metrics_xgboost_SMOTE$.estimate[[1]],
                     accuracy_per_class(CM_xgboost_SMOTE_test))
 
 results_dataframe<-rbind(results_dataframe,round(results_accuracy_XGBOOST_SMOTE,2))
-rownames(results_dataframe)[9]<-"XGBOOST SMOTE"
+rownames(results_dataframe)[13]<-"XGBOOST SMOTE"
+
+#---------------F1
+results_f1_SMOTE_XGBOOST <- f1_table_both_classes(CM_xgboost_SMOTE_train,CM_xgboost_SMOTE_test, model_name = " XGBOOST SMOTE ")
+
+results_F1<-rbind(results_F1,results_f1_SMOTE_XGBOOST)
+
+```
+
+```{r}
+#INDEKSY 12, 13 DLA KNN I SVM W TABELKACH ACCURACY
+
+#SVM 
+
+SVM <- svm_linear(mode = "classification") %>% 
+  set_engine("LiblineaR")
+
+
+
+
+SVM_fit_SMOTE<-fit(SVM,
+                 DNF~.,
+                 data=Train_SMOTE)
+
+SVM_pred_train_SMOTE<-predict(SVM_fit_SMOTE,
+                        Train_SMOTE) %>% 
+  bind_cols(dplyr::select(Train_SMOTE, DNF))
+
+
+SVM_pred_test_SMOTE<-predict(SVM_fit_SMOTE,
+                        Test_SMOTE) %>% 
+ bind_cols(dplyr::select(Test_SMOTE, DNF))
+
+
+train_metrics_SVM_SMOTE<-metrics(
+  SVM_pred_train_SMOTE,
+  truth=DNF,
+  estimate=.pred_class
+)
+
+test_metrics_SVM_SMOTE<-metrics(
+  SVM_pred_test_SMOTE,
+  truth=DNF,
+  estimate=.pred_class
+)
+
+
+CM_SVM_SMOTE_train<-conf_mat(
+  SVM_pred_train_SMOTE,
+  truth=DNF,
+  estimate=.pred_class
+  
+)
+
+CM_SVM_SMOTE_test<-conf_mat(
+  
+  SVM_pred_test_SMOTE,
+  truth=DNF,
+  estimate=.pred_class
+)
+
+results_accuracy_SVM_SMOTE<-c(train_metrics_SVM_SMOTE$.estimate[[1]],
+                    accuracy_per_class(CM_SVM_SMOTE_train),
+                    test_metrics_SVM_SMOTE$.estimate[[1]],
+                    accuracy_per_class(CM_SVM_SMOTE_test))
+
+results_dataframe<-rbind(results_dataframe,round(results_accuracy_SVM_SMOTE,2))
+rownames(results_dataframe)[14]<-"SVM SMOTE"
+
+#---------------F1
+results_f1_SMOTE_SVM <-f1_table_both_classes(CM_SVM_SMOTE_train,CM_SVM_SMOTE_test, model_name = " SVM SMOTE ")
+
+results_F1<-rbind(results_F1,results_f1_SMOTE_SVM)
 
 
 ```
 
-## Undersampling + imputacja 
 ```{r}
+#KNN
+
+KNN_fit_SMOTE<-fit(KNN,
+                 DNF~.,
+                 data=Train_SMOTE)
+
+KNN_pred_train_SMOTE<-predict(KNN_fit_SMOTE,
+                        Train_SMOTE,
+                        type="prob") %>% 
+  bind_cols(predict(KNN_fit_SMOTE,
+                   Train_SMOTE)) %>%
+  bind_cols(dplyr::select(Train_SMOTE,DNF))
+
+
+KNN_pred_test_SMOTE<-predict(KNN_fit_SMOTE,
+                        Test_SMOTE,
+                        type="prob") %>% 
+  bind_cols(predict(KNN_fit_SMOTE,
+                   Test_SMOTE)) %>%
+  bind_cols(dplyr::select(Test_SMOTE,DNF))
+
+
+train_metrics_KNN_SMOTE<-metrics(
+  KNN_pred_train_SMOTE,
+  truth=DNF,
+  estimate=.pred_class
+)
+
+test_metrics_KNN_SMOTE<-metrics(
+  KNN_pred_test_SMOTE,
+  truth=DNF,
+  estimate=.pred_class
+)
+
+
+CM_KNN_SMOTE_train<-conf_mat(
+  KNN_pred_train_SMOTE,
+  truth=DNF,
+  estimate=.pred_class
+  
+)
+
+CM_KNN_SMOTE_test<-conf_mat(
+  
+  KNN_pred_test_SMOTE,
+  truth=DNF,
+  estimate=.pred_class
+)
+
+results_accuracy_KNN_SMOTE<-c(train_metrics_KNN_SMOTE$.estimate[[1]],
+                    accuracy_per_class(CM_KNN_SMOTE_train),
+                    test_metrics_KNN_SMOTE$.estimate[[1]],
+                    accuracy_per_class(CM_KNN_SMOTE_test))
+
+results_dataframe<-rbind(results_dataframe,round(results_accuracy_KNN_SMOTE,2))
+rownames(results_dataframe)[15]<-"KNN SMOTE"
+
+#---------------F1
+results_f1_SMOTE_KNN <- f1_table_both_classes(CM_KNN_SMOTE_train,CM_KNN_SMOTE_test, model_name = " KNN SMOTE ")
+
+results_F1<-rbind(results_F1,results_f1_SMOTE_KNN)
+
+
+```
+
+```{r}
+#RDA SMOTE 
+
+nzv_info_SMOTE <- nearZeroVar(Train_SMOTE, saveMetrics = TRUE)
+
+df_SMOTE <- Train_SMOTE[, !nzv_info_SMOTE$zeroVar]
+
+df_test_SMOTE<-Test_SMOTE[, !nzv_info_SMOTE$zeroVar]
+rda_model_SMOTE <- rda(DNF ~ ., data = df_SMOTE)
+
+
+rda_pred_SMOTE <- predict(rda_model_SMOTE, df_SMOTE[, -which(names(df_SMOTE) == "DNF")])$class
+#knitr::kable(confusionMatrix(rda_pred, df_test$DNF)$table,caption = "Confusion Matrix: RDA")
+
+
+rda_pred_test_SMOTE <- predict(rda_model_SMOTE, df_test_SMOTE[, -which(names(df_test_SMOTE) == "DNF")])$class
+
+# Confusion matrices
+conf_matrix_train_RDA_SMOTE <- confusionMatrix(rda_pred_SMOTE, df_SMOTE$DNF)
+
+conf_matrix_test_RDA_SMOTE  <- confusionMatrix(rda_pred_test_SMOTE, df_test_SMOTE$DNF)
+
+results_accuracy_RDA_SMOTE <- c(
+  conf_matrix_train_RDA_SMOTE$overall["Accuracy"],
+  accuracy_per_class(conf_matrix_train_RDA_SMOTE),
+  conf_matrix_test_RDA_SMOTE$overall["Accuracy"],
+  accuracy_per_class(conf_matrix_test_RDA_SMOTE)
+)
+
+results_dataframe<-rbind(results_dataframe,round(results_accuracy_RDA_SMOTE,2))
+rownames(results_dataframe)[16]<-"RDA SMOTE"
+
+#---------------F1
+results_f1_RDA_SMOTE <- f1_table_both_classes(conf_matrix_train_RDA_SMOTE, conf_matrix_test_RDA_SMOTE, model_name = "RDA SMOTE")
+
+results_F1<-rbind(results_F1,results_f1_RDA_SMOTE)
+
+```
+
+```{r}
+library(tidymodels)
 #undersampling+imputacja 
 split_imputed_2<-initial_split(formula11,0.8)
 train_imputed_2<-training(split_imputed_2)
@@ -1329,7 +2275,6 @@ imputation_test_2<-bake(imputation_prep,new_data=test_imputed_2)
   
 ```
 
-
 ```{r}
 #LASEK UNDERSAMPLING 
 
@@ -1347,14 +2292,15 @@ Train_Preds_RF_undersample <- predict(random_forest_fitting_RF_undersample,
                       type = "prob") %>%
  bind_cols(predict(random_forest_fitting_RF_undersample,
                    imputation_train_2)) %>%
- bind_cols(imputation_train_2 %>% select(DNF))
+ bind_cols(dplyr::select(imputation_train_2,DNF))
 # Prediction - Test
 Test_Preds_RF_undersample <- predict(random_forest_fitting_RF_undersample,
                      imputation_test_2,
                      type = "prob") %>%
  bind_cols(predict(random_forest_fitting_RF_undersample,
                    imputation_test_2)) %>%
- bind_cols(imputation_test_2 %>% select(DNF))
+  bind_cols(dplyr::select(imputation_test_2,DNF))
+
 
 
 Train_Metrics_RF_undersample <- metrics(Train_Preds_RF_undersample,
@@ -1379,7 +2325,12 @@ results_accuracy_RF_undersample<-c(Train_Metrics_RF_undersample$.estimate[[1]],
                     accuracy_per_class(Test_CM_RF_undersample))
 
 results_dataframe<-rbind(results_dataframe,round(results_accuracy_RF_undersample,2))
-rownames(results_dataframe)[10]<-"RF Undersampled"
+rownames(results_dataframe)[17]<-"RF Undersampled"
+
+#---------------F1
+results_f1_undersampled <- f1_table_both_classes(Train_CM_RF_undersample, Test_CM_RF_undersample, model_name = "RF Undersampled")
+
+results_F1<-rbind(results_F1,results_f1_undersampled)
 ```
 
 ```{r}
@@ -1400,14 +2351,14 @@ Train_Preds_undersample <- predict(logistic_regression_fitting_undersample,
                       type = "prob") %>%
  bind_cols(predict(logistic_regression_fitting_undersample,
                    imputation_train_2)) %>%
- bind_cols(imputation_train_2 %>% select( DNF))
+ bind_cols(dplyr::select(imputation_train_2,DNF))
 # Prediction - Test
 Test_Preds_undersample <- predict(logistic_regression_fitting_undersample,
                      imputation_test_2,
                      type = "prob") %>%
  bind_cols(predict(logistic_regression_fitting_undersample,
                    imputation_test_2)) %>%
- bind_cols(imputation_test_2 %>% select( DNF))
+ bind_cols(dplyr::select(imputation_test_2,DNF))
 # Train Metrics
 Train_Metrics_undersample <- metrics(Train_Preds_undersample,
                         truth =  DNF,
@@ -1434,7 +2385,12 @@ results_accuracy_LR_undersample<-c(Train_Metrics_undersample$.estimate[[1]],
 
 
 results_dataframe<-rbind(results_dataframe,round(results_accuracy_LR_undersample,2))
-rownames(results_dataframe)[11]<-"LR Undersampled"
+rownames(results_dataframe)[18]<-"LR Undersampled"
+
+#---------------F1
+results_f1_undersampled_LR <- f1_table_both_classes(Train_CM_undersample, Test_CM_undersample, model_name = "LR Undersampled")
+
+results_F1<-rbind(results_F1,results_f1_undersampled_LR)
 
 ```
 
@@ -1453,14 +2409,14 @@ xgboost_pred_train_undersample<-predict(xgboost_fit_undersample,
                         type="prob") %>% 
   bind_cols(predict(xgboost_fit_undersample,
                    imputation_train_2)) %>%
- bind_cols(imputation_train_2 %>% select(DNF))
+ bind_cols(dplyr::select(imputation_train_2,DNF))
 
 xgboost_pred_test_undersample<-predict(xgboost_fit_undersample,
                         imputation_test_2,
                         type="prob") %>% 
   bind_cols(predict(xgboost_fit_undersample,
                    imputation_test_2)) %>%
- bind_cols(imputation_test_2 %>% select(DNF))
+ bind_cols(dplyr::select(imputation_test_2,DNF))
 
 train_metrics_xgboost_undersample<-metrics(
   xgboost_pred_train_undersample,
@@ -1476,7 +2432,7 @@ test_metrics_xgboost_undersample<-metrics(
 
 
 CM_xgboost_undersample_train<-conf_mat(
-  xgboost_pred_train_SMOTE,
+  xgboost_pred_train_undersample,
   truth=DNF,
   estimate=.pred_class
   
@@ -1495,19 +2451,222 @@ results_accuracy_XGBOOST_undersample<-c(train_metrics_xgboost_undersample$.estim
                     accuracy_per_class(CM_xgboost_undersample_test))
 
 results_dataframe<-rbind(results_dataframe,round(results_accuracy_XGBOOST_undersample,2))
-rownames(results_dataframe)[12]<-"XGBOOST Undersampled"
+rownames(results_dataframe)[19]<-"XGBOOST Undersampled"
+
+
+#---------------F1
+results_f1_undersampled_XGBOOST <- f1_table_both_classes(CM_xgboost_undersample_train, CM_xgboost_undersample_test, model_name = "XGBOOST Undersampled")
+
+results_F1<-rbind(results_F1,results_f1_undersampled_XGBOOST)
+
 
 ```
-
 
 ```{r}
-knitr::kable(results_dataframe)
+# INDEKSY 17,18 W TABELCE ACCURACY DLA KNN I SVM 
+
+#SVM 
+
+SVM <- svm_linear(mode = "classification") %>% 
+  set_engine("LiblineaR")
+
+SVM_fit_undersample<-fit(SVM,
+                 DNF~.,
+                 data=imputation_train_2)
+
+SVM_pred_train_undersample<-predict(SVM_fit_undersample,
+                        imputation_train_2) %>% 
+ bind_cols(dplyr::select(imputation_train_2,DNF))
+
+SVM_pred_test_undersample<-predict(SVM_fit_undersample,
+                        imputation_test_2) %>% 
+ bind_cols(dplyr::select(imputation_test_2,DNF))
+
+train_metrics_SVM_undersample<-metrics(
+  SVM_pred_train_undersample,
+  truth=DNF,
+  estimate=.pred_class
+)
+
+test_metrics_SVM_undersample<-metrics(
+  SVM_pred_test_undersample,
+  truth=DNF,
+  estimate=.pred_class
+)
+
+
+CM_SVM_undersample_train<-conf_mat(
+  SVM_pred_train_undersample,
+  truth=DNF,
+  estimate=.pred_class
+  
+)
+
+CM_SVM_undersample_test<-conf_mat(
+  
+  SVM_pred_test_undersample,
+  truth=DNF,
+  estimate=.pred_class
+)
+
+results_accuracy_SVM_undersample<-c(train_metrics_SVM_undersample$.estimate[[1]],
+                    accuracy_per_class(CM_SVM_undersample_train),
+                    test_metrics_SVM_undersample$.estimate[[1]],
+                    accuracy_per_class(CM_SVM_undersample_test))
+
+results_dataframe<-rbind(results_dataframe,round(results_accuracy_SVM_undersample,2))
+rownames(results_dataframe)[20]<-"SVM Undersampled"
+
+
+#---------------F1
+results_f1_undersampled_SVM <- f1_table_both_classes(CM_SVM_undersample_train, CM_SVM_undersample_test, model_name = "SVM Undersampled")
+
+results_F1<-rbind(results_F1,results_f1_undersampled_SVM)
+
 ```
-Na podstawie powyższych wartości `accuracy` dla każdego ze zbiorów i modeli , decyduje się wybrać `XGBOOST Undersampled`. Ten wariant osiąga najlepszy ogólny wynik na zbiorze testowym oraz najlepsze wyniki dla obu klas, przy zachowaniu równowagi między klasami i braku przeuczenia (różnice między Train a Test są niewielkie).
+
+```{r}
+#KNN
+
+KNN <- nearest_neighbor(mode = "classification", neighbors = 5) %>%
+  set_engine("kknn")
+
+
+
+
+
+
+KNN_fit_undersample<-fit(KNN,
+                 DNF~.,
+                 data=imputation_train_2)
+
+KNN_pred_train_undersample<-predict(KNN_fit_undersample,
+                        imputation_train_2,
+                        type="prob") %>% 
+  bind_cols(predict(KNN_fit_undersample,
+                   imputation_train_2)) %>%
+ bind_cols(dplyr::select(imputation_train_2,DNF))
+
+KNN_pred_test_undersample<-predict(KNN_fit_undersample,
+                        imputation_test_2,
+                        type="prob") %>% 
+  bind_cols(predict(KNN_fit_undersample,
+                   imputation_test_2)) %>%
+ bind_cols(dplyr::select(imputation_test_2,DNF))
+
+train_metrics_KNN_undersample<-metrics(
+  KNN_pred_train_undersample,
+  truth=DNF,
+  estimate=.pred_class
+)
+
+test_metrics_KNN_undersample<-metrics(
+  KNN_pred_test_undersample,
+  truth=DNF,
+  estimate=.pred_class
+)
+
+
+CM_KNN_undersample_train<-conf_mat(
+  KNN_pred_train_undersample,
+  truth=DNF,
+  estimate=.pred_class
+  
+)
+
+CM_KNN_undersample_test<-conf_mat(
+  
+  KNN_pred_test_undersample,
+  truth=DNF,
+  estimate=.pred_class
+)
+
+results_accuracy_KNN_undersample<-c(train_metrics_KNN_undersample$.estimate[[1]],
+                    accuracy_per_class(CM_KNN_undersample_train),
+                    test_metrics_KNN_undersample$.estimate[[1]],
+                    accuracy_per_class(CM_KNN_undersample_test))
+
+results_dataframe<-rbind(results_dataframe,round(results_accuracy_KNN_undersample,2))
+rownames(results_dataframe)[21]<-"KNN Undersampled"
+
+
+#---------------F1
+results_f1_undersampled_KNN <- f1_table_both_classes(CM_KNN_undersample_train, CM_KNN_undersample_test, model_name = "KNN Undersampled")
+
+results_F1<-rbind(results_F1,results_f1_undersampled_KNN)
+
+
+```
+
+```{r}
+# RDA 
+
+nzv_info_undersample <- nearZeroVar(imputation_train_2, saveMetrics = TRUE)
+
+df_undersample <- imputation_train_2[, !nzv_info_undersample$zeroVar]
+
+df_test_undersample<-imputation_test_2[, !nzv_info_undersample$zeroVar]
+rda_model_undersample <- rda(DNF ~ ., data = df_undersample)
+
+
+rda_pred_undersample <- predict(rda_model_undersample, df_undersample[, -which(names(df_undersample) == "DNF")])$class
+#knitr::kable(confusionMatrix(rda_pred, df_test$DNF)$table,caption = "Confusion Matrix: RDA")
+
+
+rda_pred_test_undersample <- predict(rda_model_undersample, df_test_undersample[, -which(names(df_test_undersample) == "DNF")])$class
+
+# Confusion matrices
+conf_matrix_train_RDA_undersample <- confusionMatrix(rda_pred_undersample, df_undersample$DNF)
+
+conf_matrix_test_RDA_undersample <- confusionMatrix(rda_pred_test_undersample, df_test_undersample$DNF)
+
+results_accuracy_RDA_undersample<- c(
+  conf_matrix_train_RDA_undersample$overall["Accuracy"],
+  accuracy_per_class(conf_matrix_train_RDA_undersample),
+  conf_matrix_test_RDA_undersample$overall["Accuracy"],
+  accuracy_per_class(conf_matrix_test_RDA_undersample)
+)
+
+results_dataframe<-rbind(results_dataframe,round(results_accuracy_RDA_undersample,2))
+rownames(results_dataframe)[22]<-"RDA Undersampled"
+
+#---------------F1
+results_f1_RDA_undersample <- f1_table_both_classes(conf_matrix_train_RDA_undersample, conf_matrix_test_RDA_undersample, model_name = "RDA Undersampled")
+
+results_F1<-rbind(results_F1,results_f1_RDA_undersample)
+
+
+```
+
+```{r}
+knitr::kable(results_dataframe,caption="Accuracy")
+knitr::kable(results_F1,caption="F1 score")
+```
+
+Na podstawie powyższych wartości `accuracy` oraz `F1 score` dla każdego ze zbiorów i modeli, najlepszy okazał się `XGBOOST Undersampled`, `KNN SMOTE/KNN Undersampled` mają zbliżone wyniki.Jednak wariant osiąga najlepszy ogólny wynik na zbiorze testowym oraz najlepsze wyniki dla obu klas, przy zachowaniu równowagi między klasami i braku przeuczenia (różnice między Train a Test są niewielkie).
+
+```{r}
+library(tidyverse)
+
+cos<-as.data.frame(CM_xgboost_undersample_test[1])
+colnames(cos)<-c('Predicted','Truth','Freq')
+
+ggplot(cos, aes(x = Predicted, y = Truth, fill = Freq)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = Freq), color = "black", size = 5) +
+  scale_fill_gradient(low = "beige", high = "grey") +
+  labs(title = "Confusion Matrix - XGBOOST (undersample, test set)",
+       x = "Predicted",
+       y = "Actual") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 16))
+
+
+```
 
 # Strojenie hiperparametrów
 
-Do strojenia hiperparametrów modelu XGBoost zastosowano optymalizację bayesowską, która opiera się na probabilistycznym modelowaniu funkcji celu i inteligentnym przeszukiwaniu przestrzeni parametrów. W przeciwieństwie do klasycznej siatki (grid search), podejście to szybciej znajduje kombinacje parametrów prowadzące do najlepszych wyników. 
+Do strojenia hiperparametrów modelu XGBoost zastosowano optymalizację bayesowską, która opiera się na probabilistycznym modelowaniu funkcji celu i inteligentnym przeszukiwaniu przestrzeni parametrów. W przeciwieństwie do klasycznej siatki (grid search), podejście to szybciej znajduje kombinacje parametrów prowadzące do najlepszych wyników.
 
 ```{r}
 #losowa siatka startowa 
@@ -1588,18 +2747,23 @@ final_xgb_workflow <- finalize_workflow(workflow, best_params)
 
 last_model <- last_fit(final_xgb_workflow, split =split_imputed_2)
 
-best_params
+knitr::kable(best_params, digits = 4, caption = "Najlepsze hiperparametry dla XGBoost ")
 
 
 ```
 
 ```{r}
-collect_metrics(last_model)
+library(knitr)
+
+collect_metrics(last_model) %>%
+  kable(digits = 4, caption = "Metryki końcowego modelu (na zbiorze testowym)")
+
 last_model_predictions <- collect_predictions(last_model)
+
 
 ```
 
-W wyniku optymalizacji bayesowskiej uzyskano skuteczny model XGBoost ($accuracy = 0.88$, $AUC = 0.96$), który łączy wysoką trafność klasyfikacji z dobrą odpornością na przeuczenie. Kluczowe parametry, takie jak niski learn_rate, umiarkowana głębokość drzew (`tree_depth`) i `loss_reduction`, zapewniły stabilne i uogólnione wyniki predykcyjne.
+W wyniku optymalizacji bayesowskiej uzyskano skuteczny model XGBoost ($accuracy = 0.94$, $AUC = 0.98$), który łączy wysoką trafność klasyfikacji z dobrą odpornością na przeuczenie. Kluczowe parametry, takie jak niski learn_rate, umiarkowana głębokość drzew (`tree_depth`) i `loss_reduction`, zapewniły stabilne i uogólnione wyniki predykcyjne.
 
 ```{r}
 library(yardstick)
@@ -1612,11 +2776,98 @@ last_model_predictions |>
   autoplot()
 ```
 
+Krzywa ROC dla modelu XGBoost pokazuje, że klasyfikator bardzo dobrze rozróżnia przypadki DNF od pozostałych. Krzywa gwałtownie wznosi się ku lewemu górnemu rogowi wykresu, co oznacza wysoką czułość (sensitivity) przy jednocześnie niskim odsetku fałszywie pozytywnych wyników (1 - specificity). Obszar pod krzywą (AUC) wynoszący około 0.98 potwierdza, że model ma bardzo dobrą moc dyskryminacyjną i skutecznie identyfikuje rzadkie przypadki DNF, nawet przy niezbalansowanych danych.
 
-Krzywa ROC dla modelu XGBoost pokazuje, że klasyfikator bardzo dobrze rozróżnia przypadki DNF od pozostałych. Krzywa gwałtownie wznosi się ku lewemu górnemu rogowi wykresu, co oznacza wysoką czułość (sensitivity) przy jednocześnie niskim odsetku fałszywie pozytywnych wyników (1 - specificity).
-Obszar pod krzywą (AUC) wynoszący około 0.94 potwierdza, że model ma bardzo dobrą moc dyskryminacyjną i skutecznie identyfikuje rzadkie przypadki DNF, nawet przy niezbalansowanych danych.
+# Analiza wpływu cech na ryzyko DNF za pomocą wartości SHAP
+
+Modele takie jak XGBOOST charakteryzują się problemem **black box**, są ciężkie do interpretacji.Rozwiązaniem tego problemu jest metoda **SHAP** (SHapley Additive exPlanations), która pokazuje wpływ każdej cechy na predykcję.
+
+```{r}
+library(SHAPforxgboost)
+
+X2 <- dplyr::select(imputation_train_2, -DNF)
+
+xgb_native_model <- extract_fit_parsnip(last_model$.workflow[[1]])$fit
 
 
+shap_values <- shap.values(xgb_model = xgb_native_model, X_train = data.matrix(X2))
+shap_long <- shap.prep(shap_contrib = shap_values$shap_score, X_train = X2)
+shap.plot.summary(shap_long)
+
+```
+
+Na podstawie powyższego wykresu SHAP można stwierdzić, że zmienne użyte w modelu mają istotny wpływ na jego predykcje. W szczególności:
+
+-   `Position.Changes` jest zdecydowanie najbardziej wpływową zmienną. Kierowcy, którzy nie ukończyli wyścigu (DNF), często tracili wiele pozycji, co czyni tę zmienną logicznie i statystycznie powiązaną z przewidywanym wynikiem.
+
+-   `Avg_stint_length` wpływa na wynik w obu kierunkach. Dłuższe stinty mogą prowadzić do nadmiernej degradacji opon i większego ryzyka DNF, podczas gdy krótsze sugerują ostrożniejsze podejście, sprzyjające ukończeniu wyścigu.
+
+-   `Tire.Usage.Aggression` wykazuje niewielki, ale zauważalny wpływ — intensywniejsze zużycie opon może wiązać się z większym ryzykiem błędów lub awarii.
+
+-   `Driver.Fast.Lap.Attempts` przyjmuje głównie dodatnie wartości SHAP, co sugeruje, że częstsze próby uzyskania szybkich okrążeń zwiększają prawdopodobieństwo DNF — być może przez bardziej ryzykowną jazdę.
+
+-   `Wind_Speed_KMH` oraz `Laps` również mają zauważalny wpływ: większa liczba okrążeń i wyższa prędkość wiatru mogą oddziaływać negatywnie na niezawodność i zachowanie bolidu.
+
+### Indywidualna analiza
+
+```{r}
+
+library(caret)
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+train_indices <- as.integer(rownames(imputation_train_2))
+imputation_train_2$Driver <- formula1$Driver[train_indices]
+
+
+X_drivers <- dplyr::select(imputation_train_2, -DNF, -Driver)
+drivers <- imputation_train_2$Driver
+
+wybrani_kierowcy <- c("Romain Grosjean", "Max Verstappen")
+
+indeksy <- match(wybrani_kierowcy, drivers)
+
+plots <- list()
+
+for (i in seq_along(indeksy)) {
+  idx <- indeksy[i]
+  one_obs <- data.matrix(X_drivers[idx, , drop = FALSE])
+  shap_contrib <- predict(xgb_native_model, one_obs, predcontrib = TRUE)
+  
+  shap_df <- data.frame(
+  Feature = colnames(one_obs),
+  SHAP = as.numeric(t(shap_contrib[, -ncol(shap_contrib)]))
+)
+  
+  shap_df <- shap_df[order(abs(shap_df$SHAP), decreasing = TRUE), ]
+  
+  p <- ggplot(head(shap_df, 10), aes(x = reorder(Feature, SHAP), y = SHAP)) +
+    geom_col(fill = "steelblue") +
+    coord_flip() +
+    labs(
+      title = paste("SHAP –", drivers[idx]),
+      x = "Cecha",
+      y = "Wpływ na predykcję DNF"
+    ) +
+    theme_minimal()
+  
+  plots[[i]] <- p
+}
+
+wrap_plots(plots)
+
+dnf_summary <- formula1 %>%
+  filter(Driver %in% wybrani_kierowcy) %>%
+  group_by(Driver) %>%
+  summarise(Liczba_DNF = sum(DNF == 1), Liczba_Wyscigow = n()) %>%
+  mutate(Procent_DNF = round(100 * Liczba_DNF / Liczba_Wyscigow, 1))
+
+knitr::kable(dnf_summary)
+
+
+```
+
+Romain Grosjean wykazuje klasyczny profil kierowcy z podwyższonym ryzykiem DNF – SHAP wskazuje na istotny wpływ częstych zmian pozycji i agresywnego stylu jazdy. W przeciwieństwie do niego, Max Verstappen osiąga podobny wpływ z Position.Changes, jednak rekompensuje to dłuższymi stintami i nieco bardziej zbalansowaną jazdą. W obu przypadkach model trafnie wychwytuje różnice w strategii i stylu jazdy jako kluczowe predyktory DNF.
 
 ```{r}
 
@@ -1628,9 +2879,6 @@ Obszar pod krzywą (AUC) wynoszący około 0.94 potwierdza, że model ma bardzo 
 
 
 ```
-
-
-
 
 ```{r}
 
@@ -1647,8 +2895,7 @@ Obszar pod krzywą (AUC) wynoszący około 0.94 potwierdza, że model ma bardzo 
 #W tire.usage.aggression liczy się aggresion=srednie tempo/dlugosc stintu , ilość okrążeń na jednym komplecie, częstotliwość pit-stopu , typ opon (bo np. jazda z dużym obciązeniem na oponach `soft` zwiększa agresję jego zużycia)
 ```
 
-
-# Podsumowanie 
+# Podsumowanie
 
 Celem projektu była kompleksowa analiza danych z wyścigów Formuły 1 z lat 2018–2024, mająca na celu identyfikację czynników wpływających na nieukończenie wyścigu przez kierowców (zmienna DNF – Did Not Finish). Analiza koncentrowała się na dwóch głównych aspektach: warunkach pogodowych oraz stylu jazdy kierowców.
 
@@ -1656,7 +2903,6 @@ Na podstawie zmiennych meteorologicznych (temperatura powietrza i toru, wilgotno
 
 Równolegle przeprowadzono segmentację stylów jazdy kierowców na podstawie wskaźników takich jak poziom agresji, zmienność czasu okrążeń czy długość stintów. Wyniki analizy wykazały, że największe ryzyko DNF występowało wśród kierowców z umiarkowaną niestabilnością i umiarkowaną agresją (klastry 2 i 3), podczas gdy najbardziej agresywni kierowcy niekoniecznie należeli do grupy najbardziej ryzykownej.
 
-Przed modelowaniem przeprowadzono testy statystyczne i analizę korelacji, które pozwoliły wyselekcjonować najistotniejsze zmienne wejściowe. Do predykcji zmiennej DNF wybrano model XGBoost, który osiągnął wysoką skuteczność klasyfikacyjną (accuracy = 0.87, AUC = 0.94), zachowując przy tym dobrą równowagę między klasami i odporność na przeuczenie. Proces strojenia hiperparametrów przeprowadzono przy użyciu optymalizacji bayesowskiej, co pozwoliło uzyskać najbardziej efektywną konfigurację modelu.
+Przed modelowaniem przeprowadzono testy statystyczne i analizę korelacji, które pozwoliły wyselekcjonować najistotniejsze zmienne wejściowe. Do predykcji zmiennej DNF wybrano model XGBoost, który osiągnął wysoką skuteczność klasyfikacyjną (accuracy = 0.94, AUC = 0.98), zachowując przy tym dobrą równowagę między klasami i odporność na przeuczenie. Proces strojenia hiperparametrów przeprowadzono przy użyciu optymalizacji bayesowskiej, co pozwoliło uzyskać najbardziej efektywną konfigurację modelu.
 
 Ostatecznie stworzony model umożliwia skuteczną klasyfikację kierowców pod względem ryzyka DNF, uwzględniając zarówno ich styl jazdy, jak i warunki pogodowe panujące podczas wyścigu. Wyniki analizy mogą być wykorzystane do wspomagania decyzji strategicznych zespołów F1, w tym w zakresie doboru opon, planowania stintów oraz oceny ryzyka w trudnych warunkach wyścigowych.
-

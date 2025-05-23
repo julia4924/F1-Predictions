@@ -5,10 +5,10 @@
 
 - **Zmienna docelowa**: `DNF` (0 – ukończył wyścig, 1 – nie ukończył)
 - **Analiza danych**: korelacje, rozkłady, klastrowanie (pogoda, styl jazdy)
-- **Modelowanie**: regresja logistyczna, random forest, XGBOOST,KNN,SVM
+- **Modelowanie**: regresja logistyczna, random forest, XGBOOST,KNN,SVM,stacking
 - **Strojenie hiperparametrów**: `tune_grid`, `tune_bayes`
-- **Ewaluacja modeli**: accuracy, ROC AUC, confusion matrix, wykresy ROC
-- **Najlepszy model**: XGBoost Undersampled (AUC ≈ 0.98)
+- **Ewaluacja modeli**: accuracy, ROC AUC, confusion matrix, wykresy ROC,PRAUC
+- **Najlepszy model**: XGBoost (AUC ≈ 0.98)
 
 
 ## Wnioski

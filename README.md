@@ -1,5 +1,5 @@
 # Predykcja DNF w wyścigach Formuły 1 z użyciem uczenia maszynowego
-
+![](biale.jpg)
 Celem projektu jest przewidywanie, czy kierowca Formuły 1 **nie ukończy wyścigu** (DNF – *Did Not Finish*), na podstawie danych wyścigowych, pogodowych i technicznych. W projekcie zastosowano klasyfikację binarną z wykorzystaniem technik takich jak regresja logistyczna, las losowy oraz XGBoost.
 
 ## Kluczowe elementy projektu
